@@ -185,3 +185,30 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .alert-item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border-radius:var(--r);font-size:12px}
 .alert-crit{background:rgba(248,81,73,.1);border:1px solid rgba(248,81,73,.3);color:#ff8079}
 .alert-warn{background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.3);color:#e0b03a}
+
+/* ── VISTA RÁPIDA MOBILE (solo carga de combustible) ──────────────────────── */
+.vr-screen{
+  position:fixed;inset:0;z-index:500;background:var(--bg);
+  display:flex;flex-direction:column;overflow-y:auto;
+}
+.vr-top{padding:18px 20px 14px;border-bottom:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;gap:2px}
+.vr-title{font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px}
+.vr-sub{font-size:11px;color:var(--text2)}
+.vr-vsel{margin-top:10px}
+.vr-vsel select{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-size:13px;font-weight:600}
+.vr-body{flex:1;padding:18px 20px 100px;display:flex;flex-direction:column;gap:14px}
+.vr-fg{display:flex;flex-direction:column;gap:6px}
+.vr-fg label{font-size:12px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.vr-fg input{padding:14px 14px;border:1px solid var(--border);border-radius:10px;font-size:18px;background:var(--surface2);color:var(--text);font-family:inherit;outline:none}
+.vr-fg input:focus{border-color:var(--primary)}
+.vr-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.vr-switch{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:10px}
+.vr-switch label{font-size:14px;font-weight:600}
+.vr-switch input{width:24px;height:24px;accent-color:var(--primary)}
+.vr-btn-main{padding:16px;border-radius:10px;border:none;background:var(--primary);color:#fff;font-size:16px;font-weight:700;cursor:pointer;margin-top:4px}
+.vr-btn-main:active{background:var(--primary-dark)}
+.vr-footer{position:fixed;bottom:0;left:0;right:0;padding:12px 20px;background:var(--surface);border-top:1px solid var(--border);display:flex;gap:10px;z-index:501}
+.vr-footer button{flex:1;padding:12px;border-radius:10px;font-size:13px;font-weight:600;border:1px solid var(--border);background:var(--surface2);color:var(--text)}
+.vr-footer button.vr-salir{background:#334155;color:#fff;border-color:#334155}
+.vr-confirm{background:rgba(63,185,80,.1);border:1px solid rgba(63,185,80,.3);border-radius:10px;padding:14px;text-align:center;color:var(--green);font-size:13px}
+.vr-full-link{text-align:center;font-size:11px;color:var(--text3);margin-top:6px}
