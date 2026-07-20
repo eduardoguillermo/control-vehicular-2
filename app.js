@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular';
-const VERSION = 'v0.01';
+const VERSION = 'v0.02';
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
 const CATEGORIAS_GASTO_VAR = ['Lavado','Multas','Peajes','Estacionamiento','Reparación no programada','Otro'];
@@ -789,12 +789,12 @@ function modalNuevaCarga(){
   const v = vehiculoActivo();
   const kmSugerido = kmActualVehiculo(v.uuid);
   abrirModal('⛽ Nueva carga de combustible', `
-    <div class="fg"><label>Kilometraje actual</label><input type="number" inputmode="numeric" id="f-km" value="${kmSugerido||''}" placeholder="km"></div>
+    <div class="fg"><label>Kilometraje actual</label><input type="number" inputmode="numeric" id="f-km" value="${kmSugerido||''}" placeholder="km" onfocus="this.select()"></div>
     <div class="fgrid">
-      <div class="fg"><label>Litros cargados</label><input type="number" inputmode="decimal" id="f-litros" step="0.01" placeholder="L" oninput="calcularTotalCarga()"></div>
-      <div class="fg"><label>Costo por litro</label><input type="number" inputmode="decimal" id="f-costoLitro" step="0.01" placeholder="$" oninput="calcularTotalCarga()"></div>
+      <div class="fg"><label>Litros cargados</label><input type="number" inputmode="decimal" id="f-litros" step="0.01" placeholder="L" oninput="calcularTotalCarga()" onfocus="this.select()"></div>
+      <div class="fg"><label>Costo por litro</label><input type="number" inputmode="decimal" id="f-costoLitro" step="0.01" placeholder="$" oninput="calcularTotalCarga()" onfocus="this.select()"></div>
     </div>
-    <div class="fg"><label>Total pagado</label><input type="number" inputmode="decimal" id="f-total" step="0.01" placeholder="$"></div>
+    <div class="fg"><label>Total pagado</label><input type="number" inputmode="decimal" id="f-total" step="0.01" placeholder="$" onfocus="this.select()"></div>
     <div class="fg" style="flex-direction:row;align-items:center;gap:10px;margin-top:6px">
       <input type="checkbox" id="f-lleno" style="width:18px;height:18px;accent-color:var(--primary)">
       <label style="text-transform:none;font-size:13px">⛽ ¿Tanque lleno?</label>
@@ -926,7 +926,7 @@ function modalRegistrarMantenimiento(mantenimientoProgramadoId){
   const prog = DB.mantenimientosProgramados.find(p=>p.uuid===mantenimientoProgramadoId);
   const kmSugerido = kmActualVehiculo(v.uuid);
   abrirModal(`✓ Registrar: ${escHtml(prog.nombre_servicio)}`, `
-    <div class="fg"><label>Kilometraje</label><input type="number" inputmode="numeric" id="f-km" value="${kmSugerido||''}"></div>
+    <div class="fg"><label>Kilometraje</label><input type="number" inputmode="numeric" id="f-km" value="${kmSugerido||''}" onfocus="this.select()"></div>
     <div class="fg"><label>Costo (opcional)</label><input type="number" inputmode="decimal" id="f-costo" step="0.01" placeholder="$"></div>
     <div class="fg"><label>Notas</label><textarea id="f-notas" placeholder="Opcional"></textarea></div>
   `, `
@@ -1014,7 +1014,7 @@ function modalNuevoComponente(){
     <div class="fg"><label>Tipo</label><select id="f-tipo">${TIPOS_COMPONENTE.map(t=>`<option>${t}</option>`).join('')}</select></div>
     <div class="fg"><label>Descripción</label><input type="text" id="f-desc" placeholder="Ej: Bridgestone 195/65"></div>
     <div class="fgrid">
-      <div class="fg"><label>Km de instalación</label><input type="number" inputmode="numeric" id="f-km" value="${kmSugerido||''}"></div>
+      <div class="fg"><label>Km de instalación</label><input type="number" inputmode="numeric" id="f-km" value="${kmSugerido||''}" onfocus="this.select()"></div>
       <div class="fg" style="flex-direction:row;align-items:center;gap:8px;margin-top:18px">
         <input type="checkbox" id="f-estimado" style="width:16px;height:16px;accent-color:var(--primary)">
         <label style="text-transform:none;font-size:12px">Es estimado</label>
@@ -1046,7 +1046,7 @@ function modalReemplazarComponente(uuid){
   const anterior = DB.componentes.find(c=>c.uuid===uuid);
   const kmSugerido = kmActualVehiculo(v.uuid);
   abrirModal(`🔄 Reemplazar: ${anterior.tipo}`, `
-    <div class="fg"><label>Km actual (del reemplazo)</label><input type="number" inputmode="numeric" id="f-km" value="${kmSugerido||''}"></div>
+    <div class="fg"><label>Km actual (del reemplazo)</label><input type="number" inputmode="numeric" id="f-km" value="${kmSugerido||''}" onfocus="this.select()"></div>
     <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px">
       <div class="text2" style="font-size:11px;margin-bottom:8px;text-transform:uppercase;font-weight:700">Datos del componente nuevo</div>
       <div class="fg"><label>Descripción</label><input type="text" id="f-desc" placeholder="Ej: Bridgestone 195/65"></div>
@@ -1191,7 +1191,7 @@ function modalNuevoGastoVariable(){
     <div class="fg"><label>Descripción</label><input type="text" id="f-desc" placeholder="Opcional"></div>
     <div class="fgrid">
       <div class="fg"><label>Monto</label><input type="number" inputmode="decimal" id="f-monto" step="0.01"></div>
-      <div class="fg"><label>Km (opcional)</label><input type="number" inputmode="numeric" id="f-km" value="${kmSugerido||''}"></div>
+      <div class="fg"><label>Km (opcional)</label><input type="number" inputmode="numeric" id="f-km" value="${kmSugerido||''}" onfocus="this.select()"></div>
     </div>
     <div class="fg"><label>Fecha</label><input type="date" id="f-fecha" value="${new Date().toISOString().slice(0,10)}"></div>
   `, `
