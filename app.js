@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular';
-const VERSION = 'v0.10';
+const VERSION = 'v0.11';
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
 const CATEGORIAS_GASTO_VAR = ['Lavado','Multas','Peajes','Estacionamiento','Reparación no programada','Otro'];
@@ -1443,11 +1443,11 @@ function mostrarSplash(){
 document.addEventListener('DOMContentLoaded', () => {
   load();
   document.getElementById('nav-version').textContent = VERSION;
-  mostrarSplash();
 
   if(esMobile()){
     iniciarVistaMobile();
   } else {
+    mostrarSplash();
     document.querySelector('.main').style.display = 'flex';
     goTo('dashboard');
   }
