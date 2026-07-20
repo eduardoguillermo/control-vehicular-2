@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular';
-const VERSION = 'v0.09';
+const VERSION = 'v0.10';
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
 const CATEGORIAS_GASTO_VAR = ['Lavado','Multas','Peajes','Estacionamiento','Reparación no programada','Otro'];
@@ -843,10 +843,10 @@ function modalNuevaCarga(){
   abrirModal('⛽ Nueva carga de combustible', `
     <div class="fg"><label>Kilometraje actual</label><input type="number" inputmode="numeric" id="f-km" value="${kmSugerido||''}" placeholder="km" onfocus="this.select()"></div>
     <div class="fgrid">
-      <div class="fg"><label>Litros cargados</label><input type="number" inputmode="decimal" id="f-litros" step="0.01" placeholder="L" oninput="calcularTotalCarga()" onfocus="this.select()"></div>
+      <div class="fg"><label>Litros cargados</label><input type="number" inputmode="decimal" id="f-litros" step="0.01" placeholder="L" oninput="calcularTotalCarga();calcularCostoLitroDesdeTotal('f-')" onfocus="this.select()"></div>
       <div class="fg"><label>Costo por litro</label><input type="number" inputmode="decimal" id="f-costoLitro" step="0.01" placeholder="$" oninput="calcularTotalCarga()" onfocus="this.select()"></div>
     </div>
-    <div class="fg"><label>Total pagado</label><input type="number" inputmode="decimal" id="f-total" step="0.01" placeholder="$" onfocus="this.select()"></div>
+    <div class="fg"><label>Total pagado</label><input type="number" inputmode="decimal" id="f-total" step="0.01" placeholder="$" oninput="calcularCostoLitroDesdeTotal('f-')" onfocus="this.select()"></div>
     <div class="fg" style="flex-direction:row;align-items:center;gap:10px;margin-top:6px">
       <input type="checkbox" id="f-lleno" style="width:18px;height:18px;accent-color:var(--primary)">
       <label style="text-transform:none;font-size:13px">⛽ ¿Tanque lleno?</label>
@@ -862,6 +862,18 @@ function calcularTotalCarga(){
   const costoLitro = Number(document.getElementById('f-costoLitro').value)||0;
   if(litros && costoLitro){
     document.getElementById('f-total').value = (litros*costoLitro).toFixed(2);
+  }
+}
+// Si el usuario carga litros + total pagado (sin precio/L), se calcula el precio/L solo.
+// Sirve tanto para el modal de PC (prefijo 'f-') como para la vista rápida mobile ('vr-').
+function calcularCostoLitroDesdeTotal(prefix){
+  const elLitros = document.getElementById(prefix+'litros');
+  const elCosto = document.getElementById(prefix+'costoLitro');
+  const elTotal = document.getElementById(prefix+'total');
+  const litros = Number(elLitros.value)||0;
+  const total = Number(elTotal.value)||0;
+  if(litros && total){
+    elCosto.value = (total/litros).toFixed(2);
   }
 }
 function guardarNuevaCarga(){
@@ -1536,7 +1548,7 @@ function renderVistaRapidaMobile(){
       <div class="vr-row">
         <div class="vr-fg">
           <label>Litros</label>
-          <input type="number" inputmode="decimal" id="vr-litros" step="0.01" placeholder="L" oninput="calcularTotalCargaMobile()" onfocus="this.select()">
+          <input type="number" inputmode="decimal" id="vr-litros" step="0.01" placeholder="L" oninput="calcularTotalCargaMobile();calcularCostoLitroDesdeTotal('vr-')" onfocus="this.select()">
         </div>
         <div class="vr-fg">
           <label>$ / Litro</label>
@@ -1545,7 +1557,7 @@ function renderVistaRapidaMobile(){
       </div>
       <div class="vr-fg">
         <label>Total pagado</label>
-        <input type="number" inputmode="decimal" id="vr-total" step="0.01" placeholder="$" onfocus="this.select()">
+        <input type="number" inputmode="decimal" id="vr-total" step="0.01" placeholder="$" oninput="calcularCostoLitroDesdeTotal('vr-')" onfocus="this.select()">
       </div>
       <div class="vr-switch">
         <label>⛽ ¿Tanque lleno?</label>
