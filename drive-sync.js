@@ -1,7 +1,6 @@
-/* drive-sync.js — v1.0.0 (DEV)
-   Sincroniza el backup de Control Vehicular DEV contra una carpeta visible
-   "ControlVehicular-DEV" en Drive, separada de la carpeta de producción
-   para no mezclar datos de prueba con los reales. Mismo patrón y mismo Client ID de OAuth
+/* drive-sync.js — v1.0.0
+   Sincroniza el backup de Control Vehicular contra una carpeta visible
+   "ControlVehicular" en Drive. Mismo patrón y mismo Client ID de OAuth
    que el resto del ecosistema de PWAs (Mini HA, FinanzasPro, Stock en Casa).
    Un solo archivo: control-vehicular_backup.json (todo el DB).
 */
