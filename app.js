@@ -2,11 +2,13 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular';
-const VERSION = 'v0.12';
+const VERSION = 'v0.13';
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
 const CATEGORIAS_GASTO_VAR = ['Lavado','Multas','Peajes','Estacionamiento','Reparación no programada','Otro'];
 const TIPOS_COMPONENTE = ['Neumáticos','Batería','Otro'];
+const TIPOS_COMBUSTIBLE = ['Super','Prime'];
+const MARCAS_COMBUSTIBLE = ['Axion','YPF','Shell','Otras'];
 
 // ── DB ────────────────────────────────────────────────────────────────────────
 let DB = {
@@ -277,10 +279,12 @@ function registrarCarga(datos){
   const costoLitro = Number(datos.costoLitro);
   const totalPagado = Number(datos.totalPagado);
   const tanqueLleno = !!datos.tanqueLleno;
+  const tipoCombustible = datos.tipoCombustible || '';
+  const marca = datos.marca || '';
 
   const nuevaCarga = tocar({
     uuid: cvNuevoUUID(),
-    vehiculoId, km, litros, costoLitro, totalPagado, tanqueLleno,
+    vehiculoId, km, litros, costoLitro, totalPagado, tanqueLleno, tipoCombustible, marca,
     fecha: hoyISO(),
     rendimiento_calculado: null,
     litros_acumulados_desde_ultimo_lleno: null
@@ -763,10 +767,11 @@ function renderDashboard(){
 
 function renderTablaCargas(cargas){
   if(!cargas.length) return `<div class="empty">Sin cargas registradas todavía.</div>`;
-  return `<table><thead><tr><th>Fecha</th><th>Km</th><th>Litros</th><th>Total</th><th>Lleno</th><th>Rendim.</th></tr></thead><tbody>
+  return `<table><thead><tr><th>Fecha</th><th>Km</th><th>Combustible</th><th>Litros</th><th>Total</th><th>Lleno</th><th>Rendim.</th></tr></thead><tbody>
     ${cargas.map(c=>`<tr>
       <td class="mono">${fmtFecha(c.fecha)}</td>
       <td>${fmtKm(c.km)}</td>
+      <td class="text2">${escHtml(c.marca||'—')} ${c.tipoCombustible?'· '+escHtml(c.tipoCombustible):''}</td>
       <td>${fmtNum(c.litros,1)} L</td>
       <td>${fmtMoney(c.totalPagado)}</td>
       <td>${c.tanqueLleno?'✅':'—'}</td>
@@ -821,10 +826,12 @@ function renderCombustible(){
       <div class="stat"><div class="stat-n">${cargas.length}</div><div class="stat-l">Cargas registradas</div></div>
     </div>
     <div class="card"><div class="card-body twrap">
-      ${cargas.length ? `<table><thead><tr><th>Fecha</th><th>Km</th><th>Litros</th><th>$/L</th><th>Total</th><th>Lleno</th><th>Rendim.</th><th></th></tr></thead><tbody>
+      ${cargas.length ? `<table><thead><tr><th>Fecha</th><th>Km</th><th>Marca</th><th>Tipo</th><th>Litros</th><th>$/L</th><th>Total</th><th>Lleno</th><th>Rendim.</th><th></th></tr></thead><tbody>
       ${cargas.map(c=>`<tr>
         <td class="mono">${fmtFecha(c.fecha)}</td>
         <td>${fmtKm(c.km)}</td>
+        <td>${escHtml(c.marca||'—')}</td>
+        <td>${escHtml(c.tipoCombustible||'—')}</td>
         <td>${fmtNum(c.litros,1)} L</td>
         <td>${fmtMoney(c.costoLitro)}</td>
         <td>${fmtMoney(c.totalPagado)}</td>
@@ -840,8 +847,14 @@ function renderCombustible(){
 function modalNuevaCarga(){
   const v = vehiculoActivo();
   const kmSugerido = kmActualVehiculo(v.uuid);
+  const marcaSugerida = DB.config.ultimaMarca || MARCAS_COMBUSTIBLE[0];
+  const tipoSugerido = DB.config.ultimoTipoCombustible || TIPOS_COMBUSTIBLE[0];
   abrirModal('⛽ Nueva carga de combustible', `
     <div class="fg"><label>Kilometraje actual</label><input type="number" inputmode="numeric" id="f-km" value="${kmSugerido||''}" placeholder="km" onfocus="this.select()"></div>
+    <div class="fgrid">
+      <div class="fg"><label>Marca</label><select id="f-marca">${MARCAS_COMBUSTIBLE.map(m=>`<option ${m===marcaSugerida?'selected':''}>${m}</option>`).join('')}</select></div>
+      <div class="fg"><label>Tipo</label><select id="f-tipoCombustible">${TIPOS_COMBUSTIBLE.map(t=>`<option ${t===tipoSugerido?'selected':''}>${t}</option>`).join('')}</select></div>
+    </div>
     <div class="fgrid">
       <div class="fg"><label>Litros cargados</label><input type="number" inputmode="decimal" id="f-litros" step="0.01" placeholder="L" oninput="calcularTotalCarga();calcularCostoLitroDesdeTotal('f-')" onfocus="this.select()"></div>
       <div class="fg"><label>Costo por litro</label><input type="number" inputmode="decimal" id="f-costoLitro" step="0.01" placeholder="$" oninput="calcularTotalCarga()" onfocus="this.select()"></div>
@@ -879,13 +892,17 @@ function calcularCostoLitroDesdeTotal(prefix){
 function guardarNuevaCarga(){
   const v = vehiculoActivo();
   const km = Number(document.getElementById('f-km').value);
+  const marca = document.getElementById('f-marca').value;
+  const tipoCombustible = document.getElementById('f-tipoCombustible').value;
   const litros = Number(document.getElementById('f-litros').value);
   const costoLitro = Number(document.getElementById('f-costoLitro').value);
   const totalPagado = Number(document.getElementById('f-total').value);
   const tanqueLleno = document.getElementById('f-lleno').checked;
   if(!km || !litros || !totalPagado){ alert('Completá km, litros y total.'); return; }
+  DB.config.ultimaMarca = marca;
+  DB.config.ultimoTipoCombustible = tipoCombustible;
   cerrarModal();
-  const { carga, alertas } = registrarCarga({ vehiculoId: v.uuid, km, litros, costoLitro, totalPagado, tanqueLleno });
+  const { carga, alertas } = registrarCarga({ vehiculoId: v.uuid, km, marca, tipoCombustible, litros, costoLitro, totalPagado, tanqueLleno });
   goTo('combustible');
   if(carga.rendimiento_calculado){
     setTimeout(()=>alert(`✅ Carga guardada.\nRendimiento: ${fmtNum(carga.rendimiento_calculado,1)} km/L`), 100);
@@ -1523,6 +1540,8 @@ function renderVistaRapidaMobile(){
 
   const v = vehiculoActivo();
   const kmSugerido = kmActualVehiculo(v.uuid);
+  const marcaSugerida = DB.config.ultimaMarca || MARCAS_COMBUSTIBLE[0];
+  const tipoSugerido = DB.config.ultimoTipoCombustible || TIPOS_COMBUSTIBLE[0];
 
   const el = document.createElement('div');
   el.id = 'vr-screen';
@@ -1544,6 +1563,16 @@ function renderVistaRapidaMobile(){
       <div class="vr-fg">
         <label>Kilometraje actual</label>
         <input type="number" inputmode="numeric" id="vr-km" value="${kmSugerido||''}" placeholder="km" onfocus="this.select()">
+      </div>
+      <div class="vr-row">
+        <div class="vr-fg">
+          <label>Marca</label>
+          <select id="vr-marca">${MARCAS_COMBUSTIBLE.map(m=>`<option ${m===marcaSugerida?'selected':''}>${m}</option>`).join('')}</select>
+        </div>
+        <div class="vr-fg">
+          <label>Tipo</label>
+          <select id="vr-tipoCombustible">${TIPOS_COMBUSTIBLE.map(t=>`<option ${t===tipoSugerido?'selected':''}>${t}</option>`).join('')}</select>
+        </div>
       </div>
       <div class="vr-row">
         <div class="vr-fg">
@@ -1587,13 +1616,17 @@ function calcularTotalCargaMobile(){
 function guardarCargaRapidaMobile(){
   const v = vehiculoActivo();
   const km = Number(document.getElementById('vr-km').value);
+  const marca = document.getElementById('vr-marca').value;
+  const tipoCombustible = document.getElementById('vr-tipoCombustible').value;
   const litros = Number(document.getElementById('vr-litros').value);
   const costoLitro = Number(document.getElementById('vr-costoLitro').value);
   const totalPagado = Number(document.getElementById('vr-total').value);
   const tanqueLleno = document.getElementById('vr-lleno').checked;
   if(!km || !litros || !totalPagado){ alert('Completá km, litros y total.'); return; }
+  DB.config.ultimaMarca = marca;
+  DB.config.ultimoTipoCombustible = tipoCombustible;
 
-  const { carga, alertas } = registrarCarga({ vehiculoId: v.uuid, km, litros, costoLitro, totalPagado, tanqueLleno });
+  const { carga, alertas } = registrarCarga({ vehiculoId: v.uuid, km, marca, tipoCombustible, litros, costoLitro, totalPagado, tanqueLleno });
 
   let msg = '✅ Carga guardada.';
   if(carga.rendimiento_calculado) msg += ` Rendimiento: ${fmtNum(carga.rendimiento_calculado,1)} km/L.`;
