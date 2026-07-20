@@ -1,7 +1,7 @@
 'use strict';
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
-const SKEY = 'control-vehicular';
+const SKEY = 'control-vehicular-dev2';
 const VERSION = 'v0.17';
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -76,7 +76,7 @@ function save(){
 function tocar(registro){ registro.lastModified = Date.now(); return registro; }
 
 // ── SNAPSHOTS (safe-close) ──────────────────────────────────────────────────
-const SKEY_SNAPS = 'control-vehicular-snaps';
+const SKEY_SNAPS = 'control-vehicular-dev2-snaps';
 const MAX_SNAPS = 10;
 
 function cvCargarSnaps(){
@@ -1472,7 +1472,7 @@ function mostrarSplash(){
     <div style="background:#1e2128;border-bottom:1px solid rgba(255,255,255,0.08);padding:10px 18px;display:flex;align-items:center;gap:10px;">
       <div style="width:32px;height:32px;background:#2d7a4f;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">🚗</div>
       <div>
-        <div style="font-weight:700;font-size:13px;color:#e0e0e0;">Control Vehicular</div>
+        <div style="font-weight:700;font-size:13px;color:#e0e0e0;">Control Vehicular <span style="color:#f59e0b;">DEV</span></div>
         <div style="font-size:10px;color:#7aa88a;">Gastos y mantenimiento</div>
       </div>
     </div>
@@ -1482,7 +1482,7 @@ function mostrarSplash(){
       </div>
       <div style="text-align:center;width:100%;max-width:400px;">
         <div style="display:flex;align-items:center;justify-content:center;gap:1rem;font-size:10px;color:#5a8568;font-family:monospace;letter-spacing:0.05em;">
-          <span style="color:#7aa88a;">Control Vehicular</span>
+          <span style="color:#f59e0b;">Control Vehicular DEV</span>
           <span style="opacity:0.3;">·</span>
           <span>${fecha}</span>
           <span style="opacity:0.3;">·</span>
