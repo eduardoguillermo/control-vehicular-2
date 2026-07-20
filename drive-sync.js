@@ -1,14 +1,17 @@
-/* drive-sync.js — v1.0.0
-   Sincroniza el backup de Control Vehicular contra una carpeta visible
-   "ControlVehicular" en Drive. Mismo patrón y mismo Client ID de OAuth
-   que el resto del ecosistema de PWAs (Mini HA, FinanzasPro, Stock en Casa).
-   Un solo archivo: control-vehicular_backup.json (todo el DB).
+/* drive-sync.js — v1.0.0 (DEV, SOLO LECTURA)
+   A propósito, este entorno DEV lee el backup REAL de PROD en Drive
+   ("ControlVehicular" / control-vehicular_backup.json) para poder probar
+   con datos parecidos a los reales — pero tiene la escritura bloqueada a
+   nivel de código: subirBackup() nunca llama a la API de Drive, pase lo
+   que pase en app.js. Así no hay forma de que una prueba en DEV corrompa
+   o sobreescriba el backup real de PROD.
 */
 const DriveSync = (() => {
   const CLIENT_ID = '1049169592532-is5j1j4s1bmgrc9tsq48slrgul8fbj17.apps.googleusercontent.com';
   const SCOPES = 'https://www.googleapis.com/auth/drive.file';
-  const CARPETA = 'ControlVehicular-DEV';
-  const ARCHIVO_BACKUP = 'control-vehicular_backup_dev.json';
+  // OJO: esta es la carpeta REAL de producción. DEV solo lee de acá, nunca escribe.
+  const CARPETA = 'ControlVehicular';
+  const ARCHIVO_BACKUP = 'control-vehicular_backup.json';
 
   let tokenClient = null;
   let accessToken = null;
@@ -17,7 +20,7 @@ const DriveSync = (() => {
   let renewTimer = null;
   const TOKEN_KEY = 'cveh_dev_drive_token';
 
-  function log(...args) { console.log('[DriveSync]', ...args); }
+  function log(...args) { console.log('[DriveSync DEV]', ...args); }
 
   function guardarToken(token, expiresInSeg) {
     const vencimiento = Date.now() + (expiresInSeg * 1000) - 60000;
@@ -108,15 +111,9 @@ const DriveSync = (() => {
       const resp = await api(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`);
       const data = await resp.json();
       if (data.files && data.files.length) { folderId = data.files[0].id; return folderId; }
-
-      const createResp = await api('https://www.googleapis.com/drive/v3/files', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: CARPETA, mimeType: 'application/vnd.google-apps.folder' })
-      });
-      const created = await createResp.json();
-      folderId = created.id;
-      return folderId;
+      // DEV no crea la carpeta de PROD si no existe — eso significaría que
+      // todavía no se sincronizó nada desde producción.
+      throw new Error('No se encontró la carpeta de PROD en Drive todavía. Sincronizá primero desde la app de producción.');
     })();
     try { return await _folderPromise; } finally { _folderPromise = null; }
   }
@@ -131,42 +128,25 @@ const DriveSync = (() => {
       const resp = await api(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`);
       const data = await resp.json();
       if (data.files && data.files.length) { backupFileId = data.files[0].id; return backupFileId; }
-
-      backupFileId = await subirJSON({}, true);
-      return backupFileId;
+      // DEV no crea el archivo de backup de PROD si no existe.
+      throw new Error('No se encontró el backup de PROD en Drive todavía. Sincronizá primero desde la app de producción.');
     })();
     try { return await _backupFilePromise; } finally { _backupFilePromise = null; }
   }
 
+  // ── ESCRITURA BLOQUEADA A PROPÓSITO ──────────────────────────────────────
+  // Estas funciones existen porque app.js las llama igual que en producción
+  // (auto-guardado, botón Salir, Sincronizar), pero acá son no-ops seguros:
+  // nunca hacen ningún request de escritura a la API de Drive, pase lo que
+  // pase. Así no hay ningún camino de código por el que DEV pueda pisar el
+  // backup real de PROD.
   async function subirJSON(obj, creando = false, keepalive = false) {
-    await ensureFolder();
-    const boundary = 'cveh_boundary';
-    const metadata = creando
-      ? { name: ARCHIVO_BACKUP, parents: [folderId], mimeType: 'application/json' }
-      : { mimeType: 'application/json' };
-    const body =
-      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
-      `--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(obj)}\r\n--${boundary}--`;
-
-    const url = creando
-      ? 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart'
-      : `https://www.googleapis.com/upload/drive/v3/files/${backupFileId}?uploadType=multipart`;
-
-    const opts = {
-      method: creando ? 'POST' : 'PATCH',
-      headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
-      body
-    };
-    if (keepalive && body.length < 60000) opts.keepalive = true;
-
-    const resp = await api(url, opts);
-    const data = await resp.json();
-    return data.id;
+    log('⛔ Subida bloqueada (DEV es de solo lectura). No se escribió nada en Drive.');
+    return null;
   }
-
   async function subirBackup(datosCompletos, keepalive = false) {
-    await ensureBackupFile();
-    await subirJSON(datosCompletos, false, keepalive);
+    log('⛔ Subida bloqueada (DEV es de solo lectura). No se escribió nada en Drive.');
+    return;
   }
 
   async function bajarBackup() {
@@ -178,6 +158,7 @@ const DriveSync = (() => {
   return {
     init, conectar, forzarReconexion,
     subirBackup, bajarBackup,
-    get conectado() { return !!accessToken; }
+    get conectado() { return !!accessToken; },
+    get soloLectura() { return true; }
   };
 })();
