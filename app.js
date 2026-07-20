@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular';
-const VERSION = 'v0.08';
+const VERSION = 'v0.09';
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
 const CATEGORIAS_GASTO_VAR = ['Lavado','Multas','Peajes','Estacionamiento','Reparación no programada','Otro'];
