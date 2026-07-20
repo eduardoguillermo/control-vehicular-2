@@ -1,9 +1,9 @@
 {
-  "name": "Control Vehicular",
-  "short_name": "C.Vehicular",
+  "name": "Control Vehicular (DEV)",
+  "short_name": "CVeh DEV",
   "description": "Gastos, rendimiento y mantenimiento de vehículos",
-  "start_url": "/control-vehicular/",
-  "scope": "/control-vehicular/",
+  "start_url": "/control-vehicular-2/",
+  "scope": "/control-vehicular-2/",
   "display": "standalone",
   "background_color": "#0d1117",
   "theme_color": "#2d7a4f",
