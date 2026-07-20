@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular';
-const VERSION = 'v0.03';
+const VERSION = 'v0.04';
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
 const CATEGORIAS_GASTO_VAR = ['Lavado','Multas','Peajes','Estacionamiento','Reparación no programada','Otro'];
@@ -1236,7 +1236,7 @@ function renderVehiculos(){
 }
 function modalNuevoVehiculo(){
   abrirModal('🚙 Nuevo vehículo', `
-    <div class="fg"><label>Nombre</label><input type="text" id="f-nombre" placeholder="Ej: Corolla, Moto Guille"></div>
+    <div class="fg"><label>Matrícula</label><input type="text" id="f-nombre" placeholder="Ej: AB123CD" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"></div>
     <div class="fgrid">
       <div class="fg"><label>Tipo</label><select id="f-tipo"><option>Auto</option><option>Moto</option></select></div>
       <div class="fg"><label>Año</label><input type="number" inputmode="numeric" id="f-anio"></div>
@@ -1252,8 +1252,8 @@ function modalNuevoVehiculo(){
   `);
 }
 function guardarNuevoVehiculo(){
-  const nombre = document.getElementById('f-nombre').value.trim();
-  if(!nombre){ alert('Ingresá un nombre.'); return; }
+  const nombre = document.getElementById('f-nombre').value.trim().toUpperCase();
+  if(!nombre){ alert('Ingresá la matrícula.'); return; }
   crearVehiculo({
     nombre, tipo: document.getElementById('f-tipo').value,
     marca: document.getElementById('f-marca').value.trim(),
@@ -1266,7 +1266,7 @@ function guardarNuevoVehiculo(){
 function modalEditarVehiculo(uuid){
   const v = DB.vehiculos.find(x=>x.uuid===uuid);
   abrirModal('✎ Editar vehículo', `
-    <div class="fg"><label>Nombre</label><input type="text" id="f-nombre" value="${escHtml(v.nombre)}"></div>
+    <div class="fg"><label>Matrícula</label><input type="text" id="f-nombre" value="${escHtml(v.nombre)}" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"></div>
     <div class="fgrid">
       <div class="fg"><label>Tipo</label><select id="f-tipo"><option ${v.tipo==='Auto'?'selected':''}>Auto</option><option ${v.tipo==='Moto'?'selected':''}>Moto</option></select></div>
       <div class="fg"><label>Año</label><input type="number" inputmode="numeric" id="f-anio" value="${v.anio||''}"></div>
