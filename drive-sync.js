@@ -1,21 +1,22 @@
-/* drive-sync.js — v1.0.0
-   Sincroniza el backup de Control Vehicular contra una carpeta visible
-   "ControlVehicular" en Drive. Mismo patrón y mismo Client ID de OAuth
+/* drive-sync.js — v1.0.0 (DEV)
+   Sincroniza el backup de Control Vehicular DEV contra una carpeta visible
+   "ControlVehicular-DEV" en Drive, separada de la carpeta de producción
+   para no mezclar datos de prueba con los reales. Mismo patrón y mismo Client ID de OAuth
    que el resto del ecosistema de PWAs (Mini HA, FinanzasPro, Stock en Casa).
    Un solo archivo: control-vehicular_backup.json (todo el DB).
 */
 const DriveSync = (() => {
   const CLIENT_ID = '1049169592532-is5j1j4s1bmgrc9tsq48slrgul8fbj17.apps.googleusercontent.com';
   const SCOPES = 'https://www.googleapis.com/auth/drive.file';
-  const CARPETA = 'ControlVehicular';
-  const ARCHIVO_BACKUP = 'control-vehicular_backup.json';
+  const CARPETA = 'ControlVehicular-DEV';
+  const ARCHIVO_BACKUP = 'control-vehicular_backup_dev.json';
 
   let tokenClient = null;
   let accessToken = null;
   let folderId = null;
   let backupFileId = null;
   let renewTimer = null;
-  const TOKEN_KEY = 'cveh_drive_token';
+  const TOKEN_KEY = 'cveh_dev_drive_token';
 
   function log(...args) { console.log('[DriveSync]', ...args); }
 
