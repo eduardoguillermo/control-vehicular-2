@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular';
-const VERSION = 'v0.06';
+const VERSION = 'v0.07';
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
 const CATEGORIAS_GASTO_VAR = ['Lavado','Multas','Peajes','Estacionamiento','Reparación no programada','Otro'];
@@ -103,8 +103,13 @@ function cvEliminarSnapshot(ts){
   renderBackup();
 }
 
+function esMobile(){
+  return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth <= 768;
+}
+
 async function cvSalir(){
-  abrirModal('🚪 Saliendo de Control Vehicular', `
+  const mobile = esMobile();
+  abrirModal(mobile ? '💾 Guardando' : '🚪 Saliendo de Control Vehicular', `
     <div style="display:flex;flex-direction:column;gap:12px;padding:6px 0">
       <div id="salir-snap" style="display:flex;align-items:center;gap:8px;font-size:13px"><span>⏳</span><span>Guardando snapshot local...</span></div>
       <div id="salir-drive" style="display:flex;align-items:center;gap:8px;font-size:13px"><span>⏳</span><span>Sincronizando con Google Drive...</span></div>
@@ -118,7 +123,8 @@ async function cvSalir(){
     ? '<span class="green">✅</span><span>Snapshot local guardado</span>'
     : '<span class="red">⚠️</span><span>No se pudo guardar el snapshot local</span>';
 
-  // 2. Backup a Drive (si está conectado)
+  // 2. Backup a Drive (si está conectado) — esto corre igual en cel y PC,
+  // porque el celular es el que carga los datos y necesita subirlos.
   const driveEl = document.getElementById('salir-drive');
   if(DriveSync.conectado){
     try{
@@ -131,7 +137,14 @@ async function cvSalir(){
     if(driveEl) driveEl.innerHTML = '<span class="amber">ℹ️</span><span>Drive no conectado — el backup quedó solo en este dispositivo</span>';
   }
 
-  document.getElementById('modal-foot').innerHTML = `<button class="btn btn-p" onclick="cvCerrarAppFinal()">Cerrar app</button>`;
+  // 3. El cierre de la app es SOLO comportamiento de PC. En el celular la app
+  // se sigue usando para la próxima carga de combustible: acá solo confirmamos
+  // que ya se guardó y se puede volver a la pantalla de inicio tranquilo.
+  if(mobile){
+    document.getElementById('modal-foot').innerHTML = `<button class="btn btn-p" onclick="cerrarModal()">Listo</button>`;
+  } else {
+    document.getElementById('modal-foot').innerHTML = `<button class="btn btn-p" onclick="cvCerrarAppFinal()">Cerrar app</button>`;
+  }
 }
 
 function cvCerrarAppFinal(){
