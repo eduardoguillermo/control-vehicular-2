@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Control Vehicular</title>
+<title>Control Vehicular (DEV)</title>
 <link rel="stylesheet" href="style.css">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=16">
 <link rel="apple-touch-icon" href="icon-192.png?v=16">
@@ -15,7 +15,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="C.Vehicular">
+<meta name="apple-mobile-web-app-title" content="CVeh DEV">
 </head>
 <body>
 
@@ -24,7 +24,7 @@
   <div class="nav-logo">
     <div class="logo-icon">🚗</div>
     <div>
-      <div class="logo-text">Control Vehicular</div>
+      <div class="logo-text">Control Vehicular <span style="color:#f59e0b;font-size:10px;font-weight:800;">DEV</span></div>
       <div class="logo-sub">Gastos y mantenimiento · <span id="nav-version"></span></div>
     </div>
   </div>
@@ -80,7 +80,7 @@
 <script src="app.js"></script>
 <script>
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('/control-vehicular/sw.js')
+  navigator.serviceWorker.register('/control-vehicular-2/sw.js')
     .then(r => console.log('SW registrado:', r.scope))
     .catch(e => console.error('SW error:', e));
 }
