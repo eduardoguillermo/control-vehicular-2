@@ -1,11 +1,12 @@
-const CACHE = 'control-vehicular-v0.16';
+const CACHE = 'control-vehicular-v0.17';
 const ASSETS = [
   '/control-vehicular/',
   '/control-vehicular/index.html',
   '/control-vehicular/app.js',
   '/control-vehicular/drive-sync.js',
   '/control-vehicular/style.css',
-  '/control-vehicular/manifest.json'
+  '/control-vehicular/manifest.json',
+  '/control-vehicular/instructivo.html'
 ];
 
 self.addEventListener('install', e => {
