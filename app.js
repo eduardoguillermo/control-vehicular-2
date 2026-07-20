@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular';
-const VERSION = 'v0.02';
+const VERSION = 'v0.03';
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
 const CATEGORIAS_GASTO_VAR = ['Lavado','Multas','Peajes','Estacionamiento','Reparación no programada','Otro'];
@@ -150,7 +150,7 @@ async function cvSincronizarDrive(){
 }
 
 // ── HELPERS DE FORMATO ───────────────────────────────────────────────────────
-function fmtMoney(n){ return '$ ' + (Number(n)||0).toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+function fmtMoney(n){ return '$ ' + Math.round(Number(n)||0).toLocaleString('es-AR', {minimumFractionDigits:0, maximumFractionDigits:0}); }
 function fmtKm(n){ return (Number(n)||0).toLocaleString('es-AR') + ' km'; }
 function fmtNum(n, dec=2){ return (Number(n)||0).toLocaleString('es-AR', {minimumFractionDigits:dec, maximumFractionDigits:dec}); }
 function fmtFecha(iso){
