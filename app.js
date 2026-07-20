@@ -2,13 +2,17 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular';
-const VERSION = 'v0.13';
+const VERSION = 'v0.14';
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
 const CATEGORIAS_GASTO_VAR = ['Lavado','Multas','Peajes','Estacionamiento','Reparación no programada','Otro'];
 const TIPOS_COMPONENTE = ['Neumáticos','Batería','Otro'];
 const TIPOS_COMBUSTIBLE = ['Super','Prime'];
 const MARCAS_COMBUSTIBLE = ['Axion','YPF','Shell','Otras'];
+const SUGERENCIAS_MANTENIMIENTO_DEMANDA = [
+  'Cambio de lámpara','Alineación y balanceo','Lavado','Cambio de escobillas',
+  'Revisión de frenos','Reparación de aire acondicionado','Reparación eléctrica','Otro'
+];
 
 // ── DB ────────────────────────────────────────────────────────────────────────
 let DB = {
@@ -389,7 +393,8 @@ function proximoKmMantenimiento(prog){
 function registrarMantenimientoRealizado(datos){
   const r = tocar({
     uuid: cvNuevoUUID(),
-    mantenimientoProgramadoId: datos.mantenimientoProgramadoId,
+    mantenimientoProgramadoId: datos.mantenimientoProgramadoId || null,
+    nombreLibre: datos.nombreLibre || '', // solo se usa cuando no hay mantenimientoProgramadoId (mantenimiento a demanda)
     vehiculoId: datos.vehiculoId,
     kilometraje_realizado: Number(datos.kilometraje_realizado),
     fecha: hoyISO(),
@@ -916,7 +921,10 @@ function guardarNuevaCarga(){
 function renderMantenimientos(){
   const v = vehiculoActivo();
   const km = kmActualVehiculo(v.uuid);
-  document.getElementById('pacts').innerHTML = `<button class="btn btn-p btn-sm" onclick="modalNuevoMantenimientoProgramado()">+ Programar servicio</button>`;
+  document.getElementById('pacts').innerHTML = `
+    <button class="btn btn-sm" onclick="modalMantenimientoADemanda()">+ A demanda</button>
+    <button class="btn btn-p btn-sm" onclick="modalNuevoMantenimientoProgramado()">+ Programar servicio</button>
+  `;
   const progs = DB.mantenimientosProgramados.filter(p=>p.vehiculoId===v.uuid);
 
   document.getElementById('content').innerHTML = `
@@ -948,6 +956,7 @@ function renderMantenimientos(){
     <div class="card">
       <div class="ch"><div class="ct">📋 Historial de mantenimientos realizados</div></div>
       <div class="card-body twrap">
+        <p class="text3" style="font-size:11px;margin-bottom:10px">Incluye tanto los servicios programados como los mantenimientos a demanda (los que no se repiten en un intervalo fijo, ej: cambio de lámpara, alineación y balanceo).</p>
         ${renderHistorialMantenimientos(v.uuid)}
       </div>
     </div>
@@ -959,9 +968,10 @@ function renderHistorialMantenimientos(vehiculoId){
   return `<table><thead><tr><th>Fecha</th><th>Servicio</th><th>Km</th><th>Costo</th><th>Notas</th><th></th></tr></thead><tbody>
     ${realizados.map(r=>{
       const prog = DB.mantenimientosProgramados.find(p=>p.uuid===r.mantenimientoProgramadoId);
+      const nombre = prog ? escHtml(prog.nombre_servicio) : (r.nombreLibre ? escHtml(r.nombreLibre)+' <span class="text3" style="font-size:10px">(a demanda)</span>' : '—');
       return `<tr>
         <td class="mono">${fmtFecha(r.fecha)}</td>
-        <td>${prog?escHtml(prog.nombre_servicio):'—'}</td>
+        <td>${nombre}</td>
         <td>${fmtKm(r.kilometraje_realizado)}</td>
         <td>${r.costo?fmtMoney(r.costo):'—'}</td>
         <td class="text2">${escHtml(r.notas)}</td>
@@ -1022,6 +1032,44 @@ function guardarMantenimientoRealizado(mantenimientoProgramadoId){
   const notas = document.getElementById('f-notas').value.trim();
   if(!kilometraje_realizado){ alert('Ingresá el kilometraje.'); return; }
   registrarMantenimientoRealizado({ mantenimientoProgramadoId, vehiculoId: v.uuid, kilometraje_realizado, costo, notas });
+  cerrarModal(); goTo('mantenimientos');
+}
+
+// Mantenimiento a demanda: para servicios puntuales que NO se repiten con un
+// intervalo fijo de km (cambio de lámpara, alineación y balanceo, etc).
+// No genera un mantenimientoProgramado ni alertas futuras, solo queda en el
+// historial y suma al costo por km igual que cualquier otro mantenimiento.
+function modalMantenimientoADemanda(){
+  const v = vehiculoActivo();
+  const kmSugerido = kmActualVehiculo(v.uuid);
+  abrirModal('🔧 Mantenimiento a demanda', `
+    <div class="fg">
+      <label>Servicio realizado</label>
+      <input type="text" id="f-nombreLibre" list="sugerencias-demanda" placeholder="Ej: Cambio de lámpara">
+      <datalist id="sugerencias-demanda">
+        ${SUGERENCIAS_MANTENIMIENTO_DEMANDA.map(s=>`<option value="${s}">`).join('')}
+      </datalist>
+    </div>
+    <div class="fgrid">
+      <div class="fg"><label>Kilometraje</label><input type="number" inputmode="numeric" id="f-km" value="${kmSugerido||''}" onfocus="this.select()"></div>
+      <div class="fg"><label>Costo</label><input type="number" inputmode="decimal" id="f-costo" step="0.01" placeholder="$"></div>
+    </div>
+    <div class="fg"><label>Notas</label><textarea id="f-notas" placeholder="Opcional"></textarea></div>
+  `, `
+    <button class="btn" onclick="cerrarModal()">Cancelar</button>
+    <button class="btn btn-p" onclick="guardarMantenimientoADemanda()">Guardar</button>
+  `);
+  setTimeout(()=>document.getElementById('f-nombreLibre').focus(), 50);
+}
+function guardarMantenimientoADemanda(){
+  const v = vehiculoActivo();
+  const nombreLibre = document.getElementById('f-nombreLibre').value.trim();
+  const kilometraje_realizado = Number(document.getElementById('f-km').value);
+  const costo = Number(document.getElementById('f-costo').value)||0;
+  const notas = document.getElementById('f-notas').value.trim();
+  if(!nombreLibre){ alert('Ingresá qué servicio se realizó.'); return; }
+  if(!kilometraje_realizado){ alert('Ingresá el kilometraje.'); return; }
+  registrarMantenimientoRealizado({ mantenimientoProgramadoId: null, nombreLibre, vehiculoId: v.uuid, kilometraje_realizado, costo, notas });
   cerrarModal(); goTo('mantenimientos');
 }
 
