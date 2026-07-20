@@ -1,4 +1,4 @@
-const CACHE = 'control-vehicular-v0.08';
+const CACHE = 'control-vehicular-v0.09';
 const ASSETS = [
   '/control-vehicular/',
   '/control-vehicular/index.html',
@@ -23,16 +23,14 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+  if(e.request.method !== 'GET') return;
   e.respondWith(
-    caches.match(e.request).then(cached => {
-      const fresh = fetch(e.request).then(res => {
-        if(res && res.status === 200 && e.request.method === 'GET'){
-          const clone = res.clone();
-          caches.open(CACHE).then(c => c.put(e.request, clone));
-        }
-        return res;
-      }).catch(() => cached);
-      return cached || fresh;
-    })
+    fetch(e.request, {cache:'no-store'}).then(res => {
+      if(res && res.status === 200){
+        const clone = res.clone();
+        caches.open(CACHE).then(c => c.put(e.request, clone));
+      }
+      return res;
+    }).catch(() => caches.match(e.request))
   );
 });
