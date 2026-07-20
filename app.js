@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular';
-const VERSION = 'v0.05';
+const VERSION = 'v0.06';
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
 const CATEGORIAS_GASTO_VAR = ['Lavado','Multas','Peajes','Estacionamiento','Reparación no programada','Otro'];
@@ -104,11 +104,50 @@ function cvEliminarSnapshot(ts){
 }
 
 async function cvSalir(){
-  const ok = cvHacerSnapshot(true);
-  if(typeof DriveSync !== 'undefined' && DriveSync.conectado){
-    try{ await DriveSync.subirBackup(DB, true); } catch(e){ console.error(e); }
+  abrirModal('🚪 Saliendo de Control Vehicular', `
+    <div style="display:flex;flex-direction:column;gap:12px;padding:6px 0">
+      <div id="salir-snap" style="display:flex;align-items:center;gap:8px;font-size:13px"><span>⏳</span><span>Guardando snapshot local...</span></div>
+      <div id="salir-drive" style="display:flex;align-items:center;gap:8px;font-size:13px"><span>⏳</span><span>Sincronizando con Google Drive...</span></div>
+    </div>
+  `, '');
+
+  // 1. Snapshot local (siempre)
+  const okSnap = cvHacerSnapshot(true);
+  const snapEl = document.getElementById('salir-snap');
+  if(snapEl) snapEl.innerHTML = okSnap
+    ? '<span class="green">✅</span><span>Snapshot local guardado</span>'
+    : '<span class="red">⚠️</span><span>No se pudo guardar el snapshot local</span>';
+
+  // 2. Backup a Drive (si está conectado)
+  const driveEl = document.getElementById('salir-drive');
+  if(DriveSync.conectado){
+    try{
+      await DriveSync.subirBackup(DB, true);
+      if(driveEl) driveEl.innerHTML = '<span class="green">☁️</span><span>Backup subido a Drive</span>';
+    } catch(e){
+      if(driveEl) driveEl.innerHTML = `<span class="red">⚠️</span><span>Drive falló: ${escHtml(e.message)}</span>`;
+    }
+  } else {
+    if(driveEl) driveEl.innerHTML = '<span class="amber">ℹ️</span><span>Drive no conectado — el backup quedó solo en este dispositivo</span>';
   }
-  alert(ok ? '✅ Snapshot guardado.' : '⚠️ No se pudo guardar snapshot.');
+
+  document.getElementById('modal-foot').innerHTML = `<button class="btn btn-p" onclick="cvCerrarAppFinal()">Cerrar app</button>`;
+}
+
+function cvCerrarAppFinal(){
+  window.close();
+  // Fallback: la mayoría de navegadores bloquean window.close() en pestañas
+  // que no fueron abiertas por script (incluida una PWA instalada). Si sigue
+  // abierta 300ms después, mostramos la confirmación final igual.
+  setTimeout(()=>{
+    const body = document.getElementById('modal-body');
+    if(!body) return;
+    body.innerHTML = `<div style="text-align:center;padding:14px 0">
+      <div style="font-size:34px;margin-bottom:8px">✅</div>
+      <div style="font-size:13px">Listo. Ya podés cerrar la app.</div>
+    </div>`;
+    document.getElementById('modal-foot').innerHTML = '';
+  }, 300);
 }
 
 // ── MERGE (Drive) por uuid, last-write-wins por lastModified ────────────────
