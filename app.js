@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular';
-const VERSION = 'v0.11';
+const VERSION = 'v0.12';
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
 const CATEGORIAS_GASTO_VAR = ['Lavado','Multas','Peajes','Estacionamiento','Reparación no programada','Otro'];
@@ -848,7 +848,7 @@ function modalNuevaCarga(){
     </div>
     <div class="fg"><label>Total pagado</label><input type="number" inputmode="decimal" id="f-total" step="0.01" placeholder="$" oninput="calcularCostoLitroDesdeTotal('f-')" onfocus="this.select()"></div>
     <div class="fg" style="flex-direction:row;align-items:center;gap:10px;margin-top:6px">
-      <input type="checkbox" id="f-lleno" style="width:18px;height:18px;accent-color:var(--primary)">
+      <input type="checkbox" id="f-lleno" checked style="width:18px;height:18px;accent-color:var(--primary)">
       <label style="text-transform:none;font-size:13px">⛽ ¿Tanque lleno?</label>
     </div>
   `, `
@@ -1561,7 +1561,7 @@ function renderVistaRapidaMobile(){
       </div>
       <div class="vr-switch">
         <label>⛽ ¿Tanque lleno?</label>
-        <input type="checkbox" id="vr-lleno">
+        <input type="checkbox" id="vr-lleno" checked>
       </div>
 
       <button class="vr-btn-main" onclick="guardarCargaRapidaMobile()">Guardar carga</button>
