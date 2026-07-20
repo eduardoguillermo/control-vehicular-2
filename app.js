@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular';
-const VERSION = 'v0.07';
+const VERSION = 'v0.08';
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
 const CATEGORIAS_GASTO_VAR = ['Lavado','Multas','Peajes','Estacionamiento','Reparación no programada','Otro'];
@@ -1432,7 +1432,13 @@ document.addEventListener('DOMContentLoaded', () => {
   load();
   document.getElementById('nav-version').textContent = VERSION;
   mostrarSplash();
-  goTo('dashboard');
+
+  if(esMobile()){
+    iniciarVistaMobile();
+  } else {
+    document.querySelector('.main').style.display = 'flex';
+    goTo('dashboard');
+  }
 
   if(typeof DriveSync !== 'undefined'){
     DriveSync.init(() => { console.log('Drive listo'); });
@@ -1447,3 +1453,147 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   window.addEventListener('beforeunload', ()=>{ cvHacerSnapshot(false); });
 });
+
+// ── VISTA RÁPIDA MOBILE ────────────────────────────────────────────────────────
+// En celular la app NO muestra el dashboard completo ni la navegación: solo
+// una pantalla de carga rápida de combustible, igual que la "Vista Rápida" de
+// FinanzasPro Ledger. El resto de los módulos (mantenimientos, componentes,
+// gastos, reportes) se gestionan desde la PC.
+let _modoAppCompleta = false;
+
+function iniciarVistaMobile(){
+  document.getElementById('nav').style.display = 'none';
+  document.getElementById('nav-overlay').style.display = 'none';
+  document.querySelector('.main').style.display = 'none';
+  renderVistaRapidaMobile();
+}
+
+function volverVistaMobile(){
+  _modoAppCompleta = false;
+  const existente = document.getElementById('vr-screen');
+  if(existente) existente.remove();
+  document.querySelector('.main').style.display = 'none';
+  const btnVolver = document.getElementById('btn-volver-mobile');
+  if(btnVolver) btnVolver.style.display = 'none';
+  renderVistaRapidaMobile();
+}
+
+function abrirAppCompletaDesdeMobile(){
+  _modoAppCompleta = true;
+  const vr = document.getElementById('vr-screen');
+  if(vr) vr.remove();
+  document.getElementById('nav').style.display = '';
+  document.getElementById('nav-overlay').style.display = '';
+  document.querySelector('.main').style.display = 'flex';
+  const btnVolver = document.getElementById('btn-volver-mobile');
+  if(btnVolver) btnVolver.style.display = 'inline-block';
+  goTo('dashboard');
+}
+
+function renderVistaRapidaMobile(){
+  const existente = document.getElementById('vr-screen');
+  if(existente) existente.remove();
+
+  if(!DB.vehiculos.length){
+    const el = document.createElement('div');
+    el.id = 'vr-screen';
+    el.className = 'vr-screen';
+    el.innerHTML = `
+      <div class="vr-top"><div class="vr-title">⛽ Control Vehicular</div><div class="vr-sub">Carga rápida de combustible</div></div>
+      <div class="vr-body">
+        <div class="empty">Todavía no hay ningún vehículo cargado. Configuralo desde la PC en la sección Vehículos, y después sincronizá Drive acá para verlo.</div>
+        <button class="btn" onclick="cvSincronizarDrive()">🔄 Sincronizar con Drive</button>
+      </div>
+    `;
+    document.body.appendChild(el);
+    return;
+  }
+
+  const v = vehiculoActivo();
+  const kmSugerido = kmActualVehiculo(v.uuid);
+
+  const el = document.createElement('div');
+  el.id = 'vr-screen';
+  el.className = 'vr-screen';
+  el.innerHTML = `
+    <div class="vr-top">
+      <div class="vr-title">⛽ Control Vehicular</div>
+      <div class="vr-sub">Carga rápida de combustible</div>
+      ${DB.vehiculos.length > 1 ? `
+      <div class="vr-vsel">
+        <select id="vr-vsel" onchange="cambiarVehiculoActivo(this.value); volverVistaMobile();">
+          ${DB.vehiculos.map(veh => `<option value="${veh.uuid}" ${veh.uuid===v.uuid?'selected':''}>${escHtml(veh.nombre)}</option>`).join('')}
+        </select>
+      </div>` : `<div class="vr-vsel" style="font-size:13px;color:var(--text2);margin-top:8px">🚗 ${escHtml(v.nombre)}</div>`}
+    </div>
+    <div class="vr-body">
+      <div id="vr-confirm-slot"></div>
+
+      <div class="vr-fg">
+        <label>Kilometraje actual</label>
+        <input type="number" inputmode="numeric" id="vr-km" value="${kmSugerido||''}" placeholder="km" onfocus="this.select()">
+      </div>
+      <div class="vr-row">
+        <div class="vr-fg">
+          <label>Litros</label>
+          <input type="number" inputmode="decimal" id="vr-litros" step="0.01" placeholder="L" oninput="calcularTotalCargaMobile()" onfocus="this.select()">
+        </div>
+        <div class="vr-fg">
+          <label>$ / Litro</label>
+          <input type="number" inputmode="decimal" id="vr-costoLitro" step="0.01" placeholder="$" oninput="calcularTotalCargaMobile()" onfocus="this.select()">
+        </div>
+      </div>
+      <div class="vr-fg">
+        <label>Total pagado</label>
+        <input type="number" inputmode="decimal" id="vr-total" step="0.01" placeholder="$" onfocus="this.select()">
+      </div>
+      <div class="vr-switch">
+        <label>⛽ ¿Tanque lleno?</label>
+        <input type="checkbox" id="vr-lleno">
+      </div>
+
+      <button class="vr-btn-main" onclick="guardarCargaRapidaMobile()">Guardar carga</button>
+      <div class="vr-full-link"><a onclick="abrirAppCompletaDesdeMobile()" style="color:var(--primary-light);cursor:pointer">Ver app completa</a></div>
+    </div>
+    <div class="vr-footer">
+      <button onclick="cvSincronizarDrive()">🔄 Sincronizar</button>
+      <button class="vr-salir" onclick="cvSalir()">🚪 Guardar y salir</button>
+    </div>
+  `;
+  document.body.appendChild(el);
+  setTimeout(()=>document.getElementById('vr-km').focus(), 50);
+}
+
+function calcularTotalCargaMobile(){
+  const litros = Number(document.getElementById('vr-litros').value)||0;
+  const costoLitro = Number(document.getElementById('vr-costoLitro').value)||0;
+  if(litros && costoLitro){
+    document.getElementById('vr-total').value = (litros*costoLitro).toFixed(2);
+  }
+}
+
+function guardarCargaRapidaMobile(){
+  const v = vehiculoActivo();
+  const km = Number(document.getElementById('vr-km').value);
+  const litros = Number(document.getElementById('vr-litros').value);
+  const costoLitro = Number(document.getElementById('vr-costoLitro').value);
+  const totalPagado = Number(document.getElementById('vr-total').value);
+  const tanqueLleno = document.getElementById('vr-lleno').checked;
+  if(!km || !litros || !totalPagado){ alert('Completá km, litros y total.'); return; }
+
+  const { carga, alertas } = registrarCarga({ vehiculoId: v.uuid, km, litros, costoLitro, totalPagado, tanqueLleno });
+
+  let msg = '✅ Carga guardada.';
+  if(carga.rendimiento_calculado) msg += ` Rendimiento: ${fmtNum(carga.rendimiento_calculado,1)} km/L.`;
+  const slot = document.getElementById('vr-confirm-slot');
+  if(slot) slot.innerHTML = `<div class="vr-confirm">${msg}</div>`;
+
+  if(alertas.length){
+    setTimeout(()=>alert(alertas.map(a=>a.mensaje).join('\n\n')), 150);
+  }
+
+  // Formulario queda listo para la próxima carga
+  renderVistaRapidaMobile();
+  const slot2 = document.getElementById('vr-confirm-slot');
+  if(slot2) slot2.innerHTML = `<div class="vr-confirm">${msg}</div>`;
+}
