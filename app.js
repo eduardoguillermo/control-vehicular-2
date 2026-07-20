@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular';
-const VERSION = 'v0.16';
+const VERSION = 'v0.17';
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
 const CATEGORIAS_GASTO_VAR = ['Multas','Peajes','Estacionamiento','Reparación no programada','Otro'];
@@ -672,13 +672,22 @@ function actualizarSelectorVehiculo(){
   ).join('');
 }
 
+// ── HELPER: botón de ayuda contextual ──
+function btnAyuda(ancla){
+  return `<button onclick="event.stopPropagation(); window.open('./instructivo.html#${ancla}','_blank','width=1100,height=750,resizable=yes,scrollbars=yes')" title="Ver ayuda" style="background:#f59e0b;border:none;color:#1e293b;border-radius:50%;width:20px;height:20px;font-size:10px;font-weight:800;cursor:pointer;padding:0;line-height:1;margin-left:8px;flex-shrink:0;vertical-align:middle;box-shadow:0 1px 4px rgba(0,0,0,0.3);">?</button>`;
+}
+const ANCLAS_AYUDA = {
+  dashboard: 'dashboard', combustible: 'combustible', mantenimientos: 'mantenimientos',
+  componentes: 'componentes', gastos: 'gastos', vehiculos: 'vehiculos', backup: 'backup'
+};
+
 function goTo(view){
   _currentView = view;
   cerrarNavMobile();
   document.querySelectorAll('.nav a').forEach(a=>a.classList.remove('on'));
   const navEl = document.getElementById('nav-'+view);
   if(navEl) navEl.classList.add('on');
-  document.getElementById('ptitle').textContent = TITULOS[view] || view;
+  document.getElementById('ptitle').innerHTML = (TITULOS[view] || view) + btnAyuda(ANCLAS_AYUDA[view] || 'intro');
   document.getElementById('pacts').innerHTML = '';
   actualizarSelectorVehiculo();
 
@@ -1642,7 +1651,11 @@ function renderVistaRapidaMobile(){
       </div>
 
       <button class="vr-btn-main" onclick="guardarCargaRapidaMobile()">Guardar carga</button>
-      <div class="vr-full-link"><a onclick="abrirAppCompletaDesdeMobile()" style="color:var(--primary-light);cursor:pointer">Ver app completa</a></div>
+      <div class="vr-full-link">
+        <a onclick="abrirAppCompletaDesdeMobile()" style="color:var(--primary-light);cursor:pointer">Ver app completa</a>
+        &nbsp;·&nbsp;
+        <a onclick="window.open('./instructivo.html#mobile','_blank')" style="color:var(--primary-light);cursor:pointer">❓ Ayuda</a>
+      </div>
     </div>
     <div class="vr-footer">
       <button onclick="cvSincronizarDrive()">🔄 Sincronizar</button>
