@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.37';
+const VERSION = 'v0.38';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -289,10 +289,27 @@ function gastoTotalDelPeriodo(vehiculoId, desde, hasta){
   const totalFijos = sumar(DB.gastosFijos.filter(g=>g.vehiculoId===vehiculoId).map(g=>prorratearGastoFijo(g, desde, hasta)));
   return totalCombustible + totalMantenimientos + totalComponentes + totalVariablesExtra + totalFijos;
 }
-function calcularReporteMensual(vehiculoId, mesesAtras=12){
+// Fecha más antigua con algún dato cargado para este vehículo (primera carga,
+// mantenimiento, gasto, componente, o el inicio de seguimiento del vehículo).
+function primeraFechaConDatos(vehiculoId){
+  const v = DB.vehiculos.find(x=>x.uuid===vehiculoId);
+  const fechas = [];
+  if(v && v.fecha_inicio_seguimiento) fechas.push(v.fecha_inicio_seguimiento);
+  DB.cargas.filter(c=>c.vehiculoId===vehiculoId).forEach(c=>fechas.push(c.fecha));
+  DB.mantenimientosRealizados.filter(m=>m.vehiculoId===vehiculoId).forEach(m=>fechas.push(m.fecha));
+  DB.componentes.filter(c=>c.vehiculoId===vehiculoId).forEach(c=>fechas.push(c.fecha_instalacion));
+  DB.gastosVariables.filter(g=>g.vehiculoId===vehiculoId).forEach(g=>fechas.push(g.fecha));
+  DB.gastosFijos.filter(g=>g.vehiculoId===vehiculoId).forEach(g=>fechas.push(g.fecha_inicio));
+  if(!fechas.length) return new Date();
+  fechas.sort();
+  return new Date(fechas[0]);
+}
+function calcularReporteMensual(vehiculoId){
   const hoy = new Date();
+  const inicio = primeraFechaConDatos(vehiculoId);
+  const mesesTotales = Math.max(1, (hoy.getFullYear()-inicio.getFullYear())*12 + (hoy.getMonth()-inicio.getMonth()) + 1);
   const meses = [];
-  for(let i=mesesAtras-1; i>=0; i--){
+  for(let i=mesesTotales-1; i>=0; i--){
     const d = new Date(hoy.getFullYear(), hoy.getMonth()-i, 1);
     const year = d.getFullYear(), month = d.getMonth();
     const { desde, hasta } = primerYUltimoDiaMes(year, month);
@@ -1726,7 +1743,7 @@ function guardarNuevoGastoVariable(){
 // ── VISTA: REPORTES ──────────────────────────────────────────────────────────
 function renderReportes(){
   const v = vehiculoActivo();
-  const datos = calcularReporteMensual(v.uuid, 12);
+  const datos = calcularReporteMensual(v.uuid);
   const maxKm = Math.max(...datos.map(d=>d.kmDelMes), 1);
   const maxGasto = Math.max(...datos.map(d=>d.gasto), 1);
   const hoy = new Date();
