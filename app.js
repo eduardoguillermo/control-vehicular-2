@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.40';
+const VERSION = 'v0.41';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -776,7 +776,12 @@ function mesesEntre(desde, hasta){
   return Math.max((h.getFullYear()-d.getFullYear())*12 + (h.getMonth()-d.getMonth()) + (h.getDate()>=d.getDate()?0:-1)+1, 0) || 1;
 }
 function prorratearGastoFijo(gasto, desde, hasta){
-  const meses = mesesEntre(desde, hasta);
+  // Nunca contar antes de que el gasto fijo exista (su fecha_inicio).
+  const inicioGasto = new Date(gasto.fecha_inicio);
+  const desdeEfectivo = inicioGasto > new Date(desde) ? gasto.fecha_inicio : desde;
+  if(new Date(desdeEfectivo) > new Date(hasta)) return 0; // el gasto empieza después del rango pedido
+
+  const meses = mesesEntre(desdeEfectivo, hasta);
   if(gasto.periodicidad === 'mensual') return gasto.monto * meses;
   if(gasto.periodicidad === 'anual') return (gasto.monto/12) * meses;
   if(gasto.periodicidad === 'unico'){
