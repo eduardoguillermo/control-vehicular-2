@@ -2,7 +2,7 @@
 *{box-sizing:border-box;margin:0;padding:0}
 
 :root{
-  --primary:#00838f;--primary-dark:#005662;--primary-light:#26c6da;
+  --primary:#7c5cff;--primary-dark:#5b3fd6;--primary-light:#b8a4ff;
   --bg:#0d1117;--surface:#161b22;--surface2:#21262d;
   --border:#30363d;--text:#e6edf3;--text2:#8b949e;--text3:#484f58;
   --green:#3fb950;--red:#f85149;--amber:#d29922;--blue:#58a6ff;--teal:#39d353;
@@ -197,12 +197,12 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .vr-vsel{margin-top:10px}
 .vr-vsel select{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);color:var(--text);font-size:13px;font-weight:600}
 .vr-body{flex:1;padding:18px 20px 100px;display:flex;flex-direction:column;gap:14px}
-.vr-fg{display:flex;flex-direction:column;gap:6px}
+.vr-fg{display:flex;flex-direction:column;gap:6px;min-width:0}
 .vr-fg label{font-size:12px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
-.vr-fg input{padding:14px 14px;border:1px solid var(--border);border-radius:10px;font-size:18px;background:var(--surface2);color:var(--text);font-family:inherit;outline:none}
-.vr-fg select{padding:14px 14px;border:1px solid var(--border);border-radius:10px;font-size:16px;background:var(--surface2);color:var(--text);font-family:inherit;outline:none}
+.vr-fg input{padding:14px 14px;border:1px solid var(--border);border-radius:10px;font-size:18px;background:var(--surface2);color:var(--text);font-family:inherit;outline:none;width:100%;min-width:0}
+.vr-fg select{padding:14px 14px;border:1px solid var(--border);border-radius:10px;font-size:16px;background:var(--surface2);color:var(--text);font-family:inherit;outline:none;width:100%;min-width:0}
 .vr-fg input:focus{border-color:var(--primary)}
-.vr-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.vr-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;min-width:0}
 .vr-switch{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:10px}
 .vr-switch label{font-size:14px;font-weight:600}
 .vr-switch input{width:24px;height:24px;accent-color:var(--primary)}
