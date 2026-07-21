@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.29';
+const VERSION = 'v0.30';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -1761,7 +1761,7 @@ function mostrarSplash(){
   `;
   el.innerHTML = `
     <div style="background:#1e2128;border-bottom:1px solid rgba(255,255,255,0.08);padding:10px 18px;display:flex;align-items:center;gap:10px;">
-      <div style="width:32px;height:32px;background:#2d7a4f;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">🚗</div>
+      <div style="width:32px;height:32px;background:#7c5cff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">🚗</div>
       <div>
         <div style="font-weight:700;font-size:13px;color:#e0e0e0;">Control Vehicular <span style="color:#f59e0b;">DEV</span></div>
         <div style="font-size:10px;color:#7aa88a;">Gastos y mantenimiento</div>
