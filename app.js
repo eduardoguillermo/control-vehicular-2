@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.32';
+const VERSION = 'v0.33';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -850,7 +850,7 @@ function cerrarModalVencimientos(){
 let _currentView = 'dashboard';
 const TITULOS = {
   dashboard: 'Dashboard', combustible: 'Combustible', mantenimientos: 'Mantenimientos',
-  componentes: 'Neumáticos / Batería', gastos: 'Gastos', vehiculos: 'Vehículos', backup: 'Backup'
+  componentes: 'Componentes', gastos: 'Gastos', vehiculos: 'Vehículos', backup: 'Backup'
 };
 
 function toggleNav(){
