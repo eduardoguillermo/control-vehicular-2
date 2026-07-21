@@ -343,6 +343,8 @@
     <p>Solo se calcula cuando marcás <b>tanque lleno</b>. Toma la diferencia de km desde la última vez que llenaste el tanque, y la divide por la suma de todos los litros cargados desde entonces (incluyendo cargas parciales intermedias que hayas hecho en el medio).</p>
     <div class="note">La primera carga con "tanque lleno" que registrás para un vehículo nuevo no tiene rendimiento todavía — recién queda como punto de partida para la próxima.</div>
     <p>El KPI de <b>rendimiento promedio</b> del Dashboard usa el promedio de las cargas con rendimiento calculado de los últimos 3 meses, para ver la tendencia real del vehículo.</p>
+    <h2>Editar una carga</h2>
+    <p>Desde la tabla en Combustible (PC) podés tocar <b>✎</b> en cualquier carga para corregirla. Como el rendimiento de cada carga depende de la carga anterior con tanque lleno, al guardar una edición <b>se recalcula toda la cadena</b> — no solo esa carga, también las posteriores que dependían de ella. Lo mismo pasa si eliminás una carga: las siguientes se recalculan solas para que no queden números viejos dando vueltas.</p>
   </div>
 
   <div class="section" id="mantenimientos">
@@ -408,7 +410,15 @@
       </div>
     </div>
     <h2>Gastos fijos</h2>
-    <p>Seguro, patente, cochera, alarma — cosas que pagás tengas el auto parado o lo uses todos los días. Se cargan con una periodicidad (mensual, anual o único) y se prorratean automáticamente según el rango de fechas que estés mirando.</p>
+    <p>Seguro, patente, cochera, alarma — cosas que pagás tengas el auto parado o lo uses todos los días. Se cargan con una periodicidad y se prorratean automáticamente según el rango de fechas que estés mirando:</p>
+    <table>
+      <tr><th>Periodicidad</th><th>Cómo se prorratea</th></tr>
+      <tr><td><b>Mensual</b></td><td>monto × cantidad de meses en el rango</td></tr>
+      <tr><td><b>Bimestral</b></td><td>(monto ÷ 2) × cantidad de meses en el rango — ej: la patente, que en Argentina suele pagarse cada 2 meses</td></tr>
+      <tr><td><b>Anual</b></td><td>(monto ÷ 12) × cantidad de meses en el rango</td></tr>
+      <tr><td><b>Único</b></td><td>el monto completo, una sola vez, en el mes de su fecha de inicio</td></tr>
+    </table>
+    <div class="note">Un gasto fijo nunca se cuenta en meses <b>anteriores</b> a su fecha de inicio — si lo cargaste este mes, no aparece retroactivamente en meses pasados aunque el rango que estés mirando los incluya.</div>
     <h2>Gastos variables</h2>
     <p>Multas, peajes, estacionamiento, reparaciones no programadas. (El lavado quedó en Mantenimientos → A demanda, para no duplicar el criterio.)</p>
     <h2>Costo por kilómetro</h2>
@@ -418,6 +428,7 @@
       <tr><td><b>$/km total</b></td><td>Combustible + mantenimientos + neumáticos/batería + gastos variables + gastos fijos prorrateados</td></tr>
       <tr><td><b>$/km variable</b></td><td>Lo mismo pero sin los gastos fijos — cuánto te cuesta cada km que decidís manejar, útil para comparar contra otras opciones de transporte</td></tr>
     </table>
+    <p>Debajo del total de "Gastos fijos (prorrateados)" aparece el detalle de qué gasto fijo aportó cuánto en ese rango — útil para entender de dónde sale el número si no es obvio a simple vista.</p>
     <div class="note">El cálculo necesita al menos dos cargas de combustible dentro del rango elegido para saber cuántos km se recorrieron en ese período.</div>
   </div>
 
