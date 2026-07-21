@@ -2,13 +2,13 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.30';
+const VERSION = 'v0.31';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
 const CATEGORIAS_GASTO_VAR = ['Multas','Peajes','Estacionamiento','Reparación no programada','Otro'];
 const TIPOS_COMPONENTE = ['Neumáticos','Batería','Otro'];
-const TIPOS_COMBUSTIBLE = ['Super','Prime'];
+const TIPOS_COMBUSTIBLE = ['Super','Premium'];
 const MARCAS_COMBUSTIBLE = ['Axion','YPF','Shell','Otras'];
 const SUGERENCIAS_MANTENIMIENTO_DEMANDA = [
   'Cambio de lámpara','Alineación y balanceo','Lavado','Cambio de escobillas',
