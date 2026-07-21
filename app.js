@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.41';
+const VERSION = 'v0.42';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -812,9 +812,11 @@ function calcularCostoPorKm(vehiculoId, fechaInicio, fechaFin){
   const totalVariablesExtra = sumar(
     DB.gastosVariables.filter(g=>g.vehiculoId===vehiculoId && g.fecha>=fechaInicio && g.fecha<=fechaFin).map(g=>g.monto)
   );
-  const totalFijos = sumar(
-    DB.gastosFijos.filter(g=>g.vehiculoId===vehiculoId).map(g=>prorratearGastoFijo(g, fechaInicio, fechaFin))
-  );
+  const gastosFijosDelVehiculo = DB.gastosFijos.filter(g=>g.vehiculoId===vehiculoId);
+  const desgloseFijos = gastosFijosDelVehiculo
+    .map(g => ({ tipo: g.tipo, periodicidad: g.periodicidad, monto: g.monto, aportado: prorratearGastoFijo(g, fechaInicio, fechaFin) }))
+    .filter(x => x.aportado > 0);
+  const totalFijos = sumar(desgloseFijos.map(x=>x.aportado));
 
   const totalVariable = totalCombustible + totalMantenimientos + totalComponentes + totalVariablesExtra;
   const gastoTotal = totalVariable + totalFijos;
@@ -823,7 +825,7 @@ function calcularCostoPorKm(vehiculoId, fechaInicio, fechaFin){
     kmRecorridos, kmInicio, kmFin,
     costoPorKmTotal: gastoTotal / kmRecorridos,
     costoPorKmVariable: totalVariable / kmRecorridos,
-    desglose: { totalCombustible, totalMantenimientos, totalComponentes, totalVariablesExtra, totalFijos, gastoTotal }
+    desglose: { totalCombustible, totalMantenimientos, totalComponentes, totalVariablesExtra, totalFijos, gastoTotal, desgloseFijos }
   };
 }
 
@@ -1669,6 +1671,9 @@ function actualizarCostoKm(){
         <tr><td>Componentes (neumáticos/batería)</td><td>${fmtMoney(r.desglose.totalComponentes)}</td></tr>
         <tr><td>Gastos variables extra</td><td>${fmtMoney(r.desglose.totalVariablesExtra)}</td></tr>
         <tr><td>Gastos fijos (prorrateados)</td><td>${fmtMoney(r.desglose.totalFijos)}</td></tr>
+        ${r.desglose.desgloseFijos.length ? r.desglose.desgloseFijos.map(x=>`
+        <tr><td class="text3" style="font-size:11px;padding-left:22px">↳ ${x.tipo} (${x.periodicidad}, ${fmtMoney(x.monto)})</td><td class="text3" style="font-size:11px">${fmtMoney(x.aportado)}</td></tr>
+        `).join('') : ''}
         <tr><td><b>Total</b></td><td><b>${fmtMoney(r.desglose.gastoTotal)}</b></td></tr>
       </tbody></table>
     </div>
