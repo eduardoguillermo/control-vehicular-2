@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.38';
+const VERSION = 'v0.39';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -292,9 +292,10 @@ function gastoTotalDelPeriodo(vehiculoId, desde, hasta){
 // Fecha más antigua con algún dato cargado para este vehículo (primera carga,
 // mantenimiento, gasto, componente, o el inicio de seguimiento del vehículo).
 function primeraFechaConDatos(vehiculoId){
-  const v = DB.vehiculos.find(x=>x.uuid===vehiculoId);
   const fechas = [];
-  if(v && v.fecha_inicio_seguimiento) fechas.push(v.fecha_inicio_seguimiento);
+  // No usamos fecha_inicio_seguimiento del vehículo a propósito: es metadata
+  // de cuándo se creó el registro, no necesariamente cuándo arrancaron los
+  // datos reales. El reporte solo debe empezar donde hay carga/gasto real.
   DB.cargas.filter(c=>c.vehiculoId===vehiculoId).forEach(c=>fechas.push(c.fecha));
   DB.mantenimientosRealizados.filter(m=>m.vehiculoId===vehiculoId).forEach(m=>fechas.push(m.fecha));
   DB.componentes.filter(c=>c.vehiculoId===vehiculoId).forEach(c=>fechas.push(c.fecha_instalacion));
