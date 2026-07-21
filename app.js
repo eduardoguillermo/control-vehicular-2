@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.42';
+const VERSION = 'v0.43';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -783,6 +783,7 @@ function prorratearGastoFijo(gasto, desde, hasta){
 
   const meses = mesesEntre(desdeEfectivo, hasta);
   if(gasto.periodicidad === 'mensual') return gasto.monto * meses;
+  if(gasto.periodicidad === 'bimestral') return (gasto.monto/2) * meses;
   if(gasto.periodicidad === 'anual') return (gasto.monto/12) * meses;
   if(gasto.periodicidad === 'unico'){
     const f = new Date(gasto.fecha_inicio);
@@ -1706,7 +1707,7 @@ function modalNuevoGastoFijo(){
     <div class="fg"><label>Tipo</label><select id="f-tipo">${TIPOS_GASTO_FIJO.map(t=>`<option>${t}</option>`).join('')}</select></div>
     <div class="fgrid">
       <div class="fg"><label>Monto</label><input type="number" inputmode="decimal" id="f-monto" step="0.01"></div>
-      <div class="fg"><label>Periodicidad</label><select id="f-period"><option value="mensual">Mensual</option><option value="anual">Anual</option><option value="unico">Único</option></select></div>
+      <div class="fg"><label>Periodicidad</label><select id="f-period"><option value="mensual">Mensual</option><option value="bimestral">Bimestral</option><option value="anual">Anual</option><option value="unico">Único</option></select></div>
     </div>
     <div class="fg"><label>Fecha de inicio</label><input type="date" id="f-fecha" value="${new Date().toISOString().slice(0,10)}"></div>
   `, `
