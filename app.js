@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.39';
+const VERSION = 'v0.40';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -16,6 +16,7 @@ const SUGERENCIAS_MANTENIMIENTO_DEMANDA = [
 ];
 const UMBRAL_KM_AVISO_VENCIMIENTO = 500; // avisar en el modal si faltan <= 500km para un mantenimiento
 const UMBRAL_PORCENTAJE_AVISO_VENCIMIENTO = 80; // avisar si un componente llegó al 80% de su vida útil
+const FECHA_PISO_REPORTES = new Date(2026, 6, 1); // el gráfico de Reportes nunca muestra meses anteriores a julio 2026
 
 // ── DB ────────────────────────────────────────────────────────────────────────
 let DB = {
@@ -307,7 +308,8 @@ function primeraFechaConDatos(vehiculoId){
 }
 function calcularReporteMensual(vehiculoId){
   const hoy = new Date();
-  const inicio = primeraFechaConDatos(vehiculoId);
+  let inicio = primeraFechaConDatos(vehiculoId);
+  if(inicio < FECHA_PISO_REPORTES) inicio = FECHA_PISO_REPORTES;
   const mesesTotales = Math.max(1, (hoy.getFullYear()-inicio.getFullYear())*12 + (hoy.getMonth()-inicio.getMonth()) + 1);
   const meses = [];
   for(let i=mesesTotales-1; i>=0; i--){
