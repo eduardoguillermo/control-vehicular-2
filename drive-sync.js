@@ -1,10 +1,12 @@
-/* drive-sync.js — v1.0.0 (DEV, SOLO LECTURA)
-   A propósito, este entorno DEV lee el backup REAL de PROD en Drive
-   ("ControlVehicular" / control-vehicular_backup.json) para poder probar
-   con datos parecidos a los reales — pero tiene la escritura bloqueada a
+/* drive-sync.js — v1.0.0 (DEV)
+   Este entorno DEV lee el backup REAL de PROD en Drive ("ControlVehicular" /
+   control-vehicular_backup.json) para poder probar con datos parecidos a
+   los reales — pero tiene la escritura de ese archivo en vivo bloqueada a
    nivel de código: subirBackup() nunca llama a la API de Drive, pase lo
    que pase en app.js. Así no hay forma de que una prueba en DEV corrompa
    o sobreescriba el backup real de PROD.
+   Los backups HISTÓRICOS sí escriben de verdad, pero en su propia carpeta
+   separada ("ControlVehicular-DEV"), nunca en la de PROD.
 */
 const DriveSync = (() => {
   const CLIENT_ID = '1049169592532-is5j1j4s1bmgrc9tsq48slrgul8fbj17.apps.googleusercontent.com';
@@ -157,9 +159,92 @@ const DriveSync = (() => {
     return resp.json();
   }
 
+  // ── BACKUPS HISTÓRICOS DE DEV (carpeta propia, separada de PROD) ────────
+  // A diferencia del archivo en vivo (bloqueado arriba), esto SÍ escribe de
+  // verdad — pero en una carpeta propia de DEV ('ControlVehicular-DEV'),
+  // jamás en la carpeta real de PROD. Sirve para poder probar la función de
+  // backups históricos sin ningún riesgo de tocar los datos reales.
+  const CARPETA_DEV = 'ControlVehicular-DEV';
+  const PREFIJO_HIST = 'backup_dev_';
+  const MAX_BACKUPS_HIST_DEV = 10;
+  let folderIdDev = null;
+  let _folderDevPromise = null;
+
+  async function ensureFolderDev() {
+    if (folderIdDev) return folderIdDev;
+    if (_folderDevPromise) return _folderDevPromise;
+    _folderDevPromise = (async () => {
+      const q = encodeURIComponent(`name='${CARPETA_DEV}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+      const resp = await api(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`);
+      const data = await resp.json();
+      if (data.files && data.files.length) { folderIdDev = data.files[0].id; return folderIdDev; }
+      const createResp = await api('https://www.googleapis.com/drive/v3/files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: CARPETA_DEV, mimeType: 'application/vnd.google-apps.folder' })
+      });
+      const created = await createResp.json();
+      folderIdDev = created.id;
+      return folderIdDev;
+    })();
+    try { return await _folderDevPromise; } finally { _folderDevPromise = null; }
+  }
+
+  function _nombreBackupHistoricoDev() {
+    const f = new Date();
+    const p = n => String(n).padStart(2, '0');
+    return `${PREFIJO_HIST}${f.getFullYear()}-${p(f.getMonth()+1)}-${p(f.getDate())}_${p(f.getHours())}${p(f.getMinutes())}.json`;
+  }
+
+  async function _subirJSONDev(obj, nombreArchivo) {
+    const folder = await ensureFolderDev();
+    const boundary = 'cveh_boundary_dev';
+    const metadata = { name: nombreArchivo, parents: [folder], mimeType: 'application/json' };
+    const body =
+      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
+      `--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(obj)}\r\n--${boundary}--`;
+    const resp = await api('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+      method: 'POST',
+      headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+      body
+    });
+    const data = await resp.json();
+    return data.id;
+  }
+
+  async function listarBackupsHistoricos() {
+    const folder = await ensureFolderDev();
+    const q = encodeURIComponent(`name contains '${PREFIJO_HIST}' and '${folder}' in parents and trashed=false`);
+    const resp = await api(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,createdTime)&orderBy=createdTime desc&pageSize=50`);
+    const data = await resp.json();
+    return data.files || [];
+  }
+
+  async function bajarBackupPorId(fileId) {
+    const resp = await api(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
+    return resp.json();
+  }
+
+  async function _limpiarBackupsViejosDev() {
+    try {
+      const files = await listarBackupsHistoricos();
+      if (files.length <= MAX_BACKUPS_HIST_DEV) return;
+      const sobrantes = files.slice(MAX_BACKUPS_HIST_DEV);
+      for (const f of sobrantes) {
+        try { await api(`https://www.googleapis.com/drive/v3/files/${f.id}`, { method: 'DELETE' }); } catch (e) {}
+      }
+    } catch (e) { log('Error limpiando backups viejos de DEV', e); }
+  }
+
+  async function subirBackupHistorico(datosCompletos) {
+    await _subirJSONDev(datosCompletos, _nombreBackupHistoricoDev());
+    _limpiarBackupsViejosDev();
+  }
+
   return {
     init, conectar, forzarReconexion,
     subirBackup, bajarBackup,
+    subirBackupHistorico, listarBackupsHistoricos, bajarBackupPorId,
     onToken(fn){ onTokenCallback = fn; },
     get conectado() { return !!accessToken; },
     get soloLectura() { return true; }
