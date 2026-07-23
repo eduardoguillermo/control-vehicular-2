@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.50-dev';
+const VERSION = 'v0.51-dev';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -167,7 +167,16 @@ async function cvSalir(){
   // En DEV_MODE nunca se sube nada, ni se intenta: solo queda el snapshot local.
   const driveEl = document.getElementById('salir-drive');
   if(DEV_MODE){
-    if(driveEl) driveEl.innerHTML = '<span class="amber">🔒</span><span>DEV es de solo lectura — no se sube nada a Drive</span>';
+    if(!mobile && DriveSync.conectado){
+      try{
+        await DriveSync.subirBackupHistorico(DB);
+        if(driveEl) driveEl.innerHTML = '<span class="green">☁️</span><span>Backup histórico guardado en carpeta DEV (el archivo en vivo de PROD sigue bloqueado)</span>';
+      } catch(e){
+        if(driveEl) driveEl.innerHTML = `<span class="red">⚠️</span><span>Backup histórico DEV falló: ${escHtml(e.message)}</span>`;
+      }
+    } else {
+      if(driveEl) driveEl.innerHTML = '<span class="amber">🔒</span><span>DEV es de solo lectura para el archivo en vivo — no se sube nada a PROD</span>';
+    }
   } else if(DriveSync.conectado){
     try{
       if(mobile) await cvSubirDriveMobil();
