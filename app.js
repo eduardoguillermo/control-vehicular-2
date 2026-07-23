@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.51-dev';
+const VERSION = 'v0.52-dev';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -401,12 +401,12 @@ function primerYUltimoDiaMes(year, month){
 function kmAlFinDeFecha(vehiculoId, fechaISO){
   const v = DB.vehiculos.find(x=>x.uuid===vehiculoId);
   let km = v ? (v.km_inicial||0) : 0;
-  DB.cargas.filter(c=>c.vehiculoId===vehiculoId && c.fecha<=fechaISO).forEach(c=>{ if(c.km>km) km=c.km; });
+  DB.cargas.filter(c=>!c._deleted && c.vehiculoId===vehiculoId && c.fecha<=fechaISO).forEach(c=>{ if(c.km>km) km=c.km; });
   DB.mantenimientosRealizados.filter(m=>m.vehiculoId===vehiculoId && m.fecha<=fechaISO).forEach(m=>{ if(m.kilometraje_realizado>km) km=m.kilometraje_realizado; });
   return km;
 }
 function gastoTotalDelPeriodo(vehiculoId, desde, hasta){
-  const totalCombustible = sumar(DB.cargas.filter(c=>c.vehiculoId===vehiculoId && c.fecha>=desde && c.fecha<=hasta).map(c=>c.totalPagado));
+  const totalCombustible = sumar(DB.cargas.filter(c=>!c._deleted && c.vehiculoId===vehiculoId && c.fecha>=desde && c.fecha<=hasta).map(c=>c.totalPagado));
   const totalMantenimientos = sumar(DB.mantenimientosRealizados.filter(m=>m.vehiculoId===vehiculoId && m.fecha>=desde && m.fecha<=hasta).map(m=>m.costo||0));
   const totalComponentes = sumar(DB.componentes.filter(c=>c.vehiculoId===vehiculoId && c.fecha_instalacion>=desde && c.fecha_instalacion<=hasta).map(c=>c.costo||0));
   const totalVariablesExtra = sumar(DB.gastosVariables.filter(g=>g.vehiculoId===vehiculoId && g.fecha>=desde && g.fecha<=hasta).map(g=>g.monto));
@@ -420,7 +420,7 @@ function primeraFechaConDatos(vehiculoId){
   // No usamos fecha_inicio_seguimiento del vehículo a propósito: es metadata
   // de cuándo se creó el registro, no necesariamente cuándo arrancaron los
   // datos reales. El reporte solo debe empezar donde hay carga/gasto real.
-  DB.cargas.filter(c=>c.vehiculoId===vehiculoId).forEach(c=>fechas.push(c.fecha));
+  DB.cargas.filter(c=>!c._deleted && c.vehiculoId===vehiculoId).forEach(c=>fechas.push(c.fecha));
   DB.mantenimientosRealizados.filter(m=>m.vehiculoId===vehiculoId).forEach(m=>fechas.push(m.fecha));
   DB.componentes.filter(c=>c.vehiculoId===vehiculoId).forEach(c=>fechas.push(c.fecha_instalacion));
   DB.gastosVariables.filter(g=>g.vehiculoId===vehiculoId).forEach(g=>fechas.push(g.fecha));
@@ -496,14 +496,14 @@ function eliminarVehiculo(uuid){
 function kmActualVehiculo(vehiculoId){
   const v = DB.vehiculos.find(x=>x.uuid===vehiculoId);
   let km = v ? (v.km_inicial||0) : 0;
-  DB.cargas.filter(c=>c.vehiculoId===vehiculoId).forEach(c => { if(c.km > km) km = c.km; });
+  DB.cargas.filter(c=>!c._deleted && c.vehiculoId===vehiculoId).forEach(c => { if(c.km > km) km = c.km; });
   DB.mantenimientosRealizados.filter(m=>m.vehiculoId===vehiculoId).forEach(m => { if(m.kilometraje_realizado > km) km = m.kilometraje_realizado; });
   return km;
 }
 
 // ── COMBUSTIBLE ──────────────────────────────────────────────────────────────
 function cargasVehiculo(vehiculoId){
-  return DB.cargas.filter(c=>c.vehiculoId===vehiculoId).sort((a,b)=> a.km - b.km);
+  return DB.cargas.filter(c=>!c._deleted && c.vehiculoId===vehiculoId).sort((a,b)=> a.km - b.km);
 }
 
 // Recalcula rendimiento_calculado de TODAS las cargas de un vehículo desde
@@ -585,8 +585,15 @@ function editarCarga(uuid, datos){
 function eliminarCarga(uuid){
   if(!confirm('¿Eliminar esta carga? Se va a recalcular el rendimiento de las cargas posteriores.')) return;
   const c = DB.cargas.find(x=>x.uuid===uuid);
-  const vehiculoId = c ? c.vehiculoId : null;
-  DB.cargas = DB.cargas.filter(x=>x.uuid!==uuid);
+  if(!c) return;
+  const vehiculoId = c.vehiculoId;
+  // Tombstone, no borrado físico: si se borrara del array, un merge con Drive
+  // (que compara por uuid) volvería a traerla desde el archivo remoto que
+  // todavía la tiene — la carga "resucitaría" al sincronizar. Marcándola
+  // como borrada y tocando lastModified, el borrado se propaga igual que
+  // cualquier otra edición (gana el más reciente por uuid).
+  c._deleted = true;
+  tocar(c);
   if(vehiculoId) recalcularRendimientosVehiculo(vehiculoId);
   save();
   goTo('combustible');
@@ -597,7 +604,7 @@ function kpiRendimientoPromedio3Meses(vehiculoId){
   const hace3Meses = new Date();
   hace3Meses.setMonth(hace3Meses.getMonth()-3);
   const cargas = DB.cargas.filter(c =>
-    c.vehiculoId===vehiculoId && c.tanqueLleno && c.rendimiento_calculado &&
+    !c._deleted && c.vehiculoId===vehiculoId && c.tanqueLleno && c.rendimiento_calculado &&
     new Date(c.fecha) >= hace3Meses
   );
   if(!cargas.length) return null;
@@ -611,7 +618,7 @@ function kpiUltimoRendimiento(vehiculoId){
 
 function kpiGastoCombustibleMes(vehiculoId){
   const inicioMes = new Date(); inicioMes.setDate(1); inicioMes.setHours(0,0,0,0);
-  return sumar(DB.cargas.filter(c=>c.vehiculoId===vehiculoId && new Date(c.fecha)>=inicioMes).map(c=>c.totalPagado));
+  return sumar(DB.cargas.filter(c=>!c._deleted && c.vehiculoId===vehiculoId && new Date(c.fecha)>=inicioMes).map(c=>c.totalPagado));
 }
 
 // ── MANTENIMIENTOS ────────────────────────────────────────────────────────────
@@ -956,7 +963,7 @@ function prorratearGastoFijo(gasto, desde, hasta){
 // KPI: costo por km (incluye combustible, mantenimientos, componentes reemplazados,
 // gastos variables extra, y gastos fijos prorrateados)
 function calcularCostoPorKm(vehiculoId, fechaInicio, fechaFin){
-  const cargasRango = DB.cargas.filter(c=>c.vehiculoId===vehiculoId && c.fecha>=fechaInicio && c.fecha<=fechaFin).sort((a,b)=>a.km-b.km);
+  const cargasRango = DB.cargas.filter(c=>!c._deleted && c.vehiculoId===vehiculoId && c.fecha>=fechaInicio && c.fecha<=fechaFin).sort((a,b)=>a.km-b.km);
   if(!cargasRango.length) return null;
   const kmInicio = cargasRango[0].km;
   const kmFin = cargasRango[cargasRango.length-1].km;
