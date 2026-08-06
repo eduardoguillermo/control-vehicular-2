@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.54-dev';
+const VERSION = 'v0.55-dev';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -542,10 +542,14 @@ function registrarCarga(datos){
   const tanqueLleno = !!datos.tanqueLleno;
   const tipoCombustible = datos.tipoCombustible || '';
   const marca = datos.marca || '';
+  // ubicacion: {lat,lng} capturada por GPS al momento de cargar desde el
+  // celular (opcional — undefined/null si no está disponible o si la carga
+  // se hizo desde la PC).
+  const ubicacion = datos.ubicacion || null;
 
   const nuevaCarga = tocar({
     uuid: cvNuevoUUID(),
-    vehiculoId, km, litros, costoLitro, totalPagado, tanqueLleno, tipoCombustible, marca,
+    vehiculoId, km, litros, costoLitro, totalPagado, tanqueLleno, tipoCombustible, marca, ubicacion,
     fecha: datos.fecha || hoyISO(),
     rendimiento_calculado: null,
     litros_acumulados_desde_ultimo_lleno: null
@@ -1282,7 +1286,7 @@ function renderCombustible(){
       <div class="stat"><div class="stat-n">${cargas.length}</div><div class="stat-l">Cargas registradas</div></div>
     </div>
     <div class="card"><div class="card-body twrap">
-      ${cargas.length ? `<table><thead><tr><th>Fecha</th><th>Km</th><th>Marca</th><th>Tipo</th><th>Litros</th><th>$/L</th><th>Total</th><th>Lleno</th><th>Rendim.</th><th></th></tr></thead><tbody>
+      ${cargas.length ? `<table><thead><tr><th>Fecha</th><th>Km</th><th>Marca</th><th>Tipo</th><th>Litros</th><th>$/L</th><th>Total</th><th>Lleno</th><th>Rendim.</th><th>📍</th><th></th></tr></thead><tbody>
       ${cargas.map(c=>`<tr>
         <td class="mono">${fmtFecha(c.fecha)}</td>
         <td>${fmtKm(c.km)}</td>
@@ -1293,6 +1297,7 @@ function renderCombustible(){
         <td>${fmtMoney(c.totalPagado)}</td>
         <td>${c.tanqueLleno?'✅':'—'}</td>
         <td>${fmtRendimiento(c.rendimiento_calculado)}</td>
+        <td>${c.ubicacion ? `<a href="https://www.google.com/maps?q=${c.ubicacion.lat},${c.ubicacion.lng}" target="_blank" rel="noopener" title="Ver ubicación en el mapa">📍</a>` : '—'}</td>
         <td style="white-space:nowrap">
           <button class="btn btn-sm" onclick="modalEditarCarga('${c.uuid}')">✎</button>
           <button class="btn btn-sm btn-d" onclick="eliminarCarga('${c.uuid}')">✕</button>
@@ -2465,6 +2470,7 @@ function renderVistaRapidaMobile(){
         <label>⛽ ¿Tanque lleno?</label>
         <input type="checkbox" id="vr-lleno" checked>
       </div>
+      <div class="vr-gps" id="vr-gps-status">📍 Obteniendo ubicación…</div>
 
       <button class="vr-btn-main" onclick="guardarCargaRapidaMobile()">Guardar carga</button>
       <div class="vr-full-link">
@@ -2481,8 +2487,36 @@ function renderVistaRapidaMobile(){
   `;
   document.body.appendChild(el);
   setTimeout(()=>document.getElementById('vr-km').focus(), 50);
+  cvCapturarUbicacionMobile();
 }
 
+// Ubicación GPS de la carga en curso (celular). Se vuelve a capturar cada
+// vez que se abre/reinicia la vista rápida, así cada carga queda con su
+// propia posición. null si no está disponible, no soportada, o el usuario
+// no dio permiso — la carga se guarda igual, sin ubicación.
+let _vrUbicacionActual = null;
+function cvCapturarUbicacionMobile(){
+  _vrUbicacionActual = null;
+  const el = document.getElementById('vr-gps-status');
+  if(!navigator.geolocation){
+    if(el) el.textContent = '📍 GPS no disponible en este navegador';
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      _vrUbicacionActual = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      const elNow = document.getElementById('vr-gps-status');
+      if(elNow) elNow.textContent = '📍 Ubicación capturada';
+    },
+    err => {
+      const elNow = document.getElementById('vr-gps-status');
+      if(elNow) elNow.textContent = err.code === err.PERMISSION_DENIED
+        ? '📍 Sin permiso de ubicación (se guarda sin ella)'
+        : '📍 No se pudo obtener ubicación (se guarda sin ella)';
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+  );
+}
 
 function guardarCargaRapidaMobile(){
   const v = vehiculoActivo();
@@ -2498,10 +2532,11 @@ function guardarCargaRapidaMobile(){
   DB.config.ultimaMarca = marca;
   DB.config.ultimoTipoCombustible = tipoCombustible;
 
-  const { carga, alertas } = registrarCarga({ vehiculoId: v.uuid, km, marca, tipoCombustible, litros, costoLitro, totalPagado, tanqueLleno });
+  const { carga, alertas } = registrarCarga({ vehiculoId: v.uuid, km, marca, tipoCombustible, litros, costoLitro, totalPagado, tanqueLleno, ubicacion: _vrUbicacionActual });
 
   let msg = '✅ Carga guardada.';
   if(carga.rendimiento_calculado) msg += ` Rendimiento: ${fmtRendimiento(carga.rendimiento_calculado)}.`;
+  msg += carga.ubicacion ? ' 📍 Con ubicación.' : '';
   const slot = document.getElementById('vr-confirm-slot');
   if(slot) slot.innerHTML = `<div class="vr-confirm">${msg}</div>`;
 
