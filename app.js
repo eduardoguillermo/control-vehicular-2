@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.56-dev';
+const VERSION = 'v0.57-dev';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -188,7 +188,10 @@ async function cvSalir(){
       if(driveEl) driveEl.innerHTML = `<span class="red">⚠️</span><span>Drive falló: ${escHtml(e.message)}</span>`;
     }
   } else {
-    if(driveEl) driveEl.innerHTML = '<span class="amber">ℹ️</span><span>Drive no conectado — el backup quedó solo en este dispositivo</span>';
+    if(driveEl) driveEl.innerHTML = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span class="amber">ℹ️</span><span>Drive no conectado — el backup quedó solo en este dispositivo</span>
+      <button class="btn btn-sm btn-p" id="btn-conectar-salir" onclick="cvConectarYSubirDesdeSalir(${mobile})">🔄 Conectar y subir</button>
+    </div>`;
   }
 
   // 3. El cierre de la app es SOLO comportamiento de PC. En el celular la app
@@ -200,6 +203,105 @@ async function cvSalir(){
     document.getElementById('modal-foot').innerHTML = `<button class="btn btn-p" onclick="cvCerrarAppFinal()">Cerrar app</button>`;
   }
 }
+
+// ── BOTÓN RÁPIDO DE DRIVE (topbar) ───────────────────────────────────────────
+// Refleja el estado de conexión y permite reconectar con un solo click desde
+// cualquier pantalla, sin tener que ir a Backup. Solo aplica a la app de PC
+// (el celular no muestra esta topbar).
+function cvActualizarBotonDriveTopbar(){
+  const btn = document.getElementById('btn-drive-quick');
+  if(!btn) return;
+  const conectado = typeof DriveSync !== 'undefined' && DriveSync.conectado;
+  if(conectado){
+    btn.innerHTML = '☁️ Drive ✅';
+    btn.style.color = '#4ade80';
+    btn.style.borderColor = 'rgba(74,222,128,0.35)';
+    btn.title = 'Drive conectado';
+  } else {
+    btn.innerHTML = '☁️ Drive ⚠️';
+    btn.style.color = '#fbbf24';
+    btn.style.borderColor = 'rgba(251,191,36,0.35)';
+    btn.title = 'Drive no conectado — click para conectar';
+  }
+}
+
+async function cvConectarRapido(){
+  if(typeof DriveSync === 'undefined') return;
+  if(DriveSync.conectado){
+    // Ya conectado: aprovechar el click para forzar una sincronización rápida.
+    cvSincronizarDrive(true);
+    return;
+  }
+  const btn = document.getElementById('btn-drive-quick');
+  if(btn){
+    btn.innerHTML = '☁️ Conectando...';
+    btn.style.color = '#94a3b8';
+    btn.disabled = true;
+  }
+  DriveSync.conectar();
+  await cvEsperarConexionDrive(6000);
+  if(btn) btn.disabled = false;
+  cvActualizarBotonDriveTopbar();
+}
+
+// Espera hasta timeoutMs a que DriveSync quede conectado (polling cada 250ms).
+// Resuelve true/false. Se usa tanto en la topbar como en el modal de salida.
+function cvEsperarConexionDrive(timeoutMs){
+  return new Promise(resolve => {
+    if(typeof DriveSync !== 'undefined' && DriveSync.conectado) return resolve(true);
+    const inicio = Date.now();
+    const t = setInterval(() => {
+      if(typeof DriveSync !== 'undefined' && DriveSync.conectado){
+        clearInterval(t);
+        resolve(true);
+      } else if(Date.now() - inicio > timeoutMs){
+        clearInterval(t);
+        resolve(false);
+      }
+    }, 250);
+  });
+}
+
+// Botón "🔄 Conectar y subir" dentro del propio aviso del modal de salida:
+// conecta y, si se logra, reintenta la subida del backup ahí mismo sin
+// obligar a cerrar el modal y volver a intentar "Salir".
+async function cvConectarYSubirDesdeSalir(mobile){
+  const driveEl = document.getElementById('salir-drive');
+  const btn = document.getElementById('btn-conectar-salir');
+  if(btn){ btn.disabled = true; btn.textContent = 'Conectando...'; }
+  if(typeof DriveSync === 'undefined'){
+    if(driveEl) driveEl.innerHTML = '<span class="red">⚠️</span><span>Drive Sync no disponible.</span>';
+    return;
+  }
+  DriveSync.conectar();
+  const ok = await cvEsperarConexionDrive(6000);
+  cvActualizarBotonDriveTopbar();
+  if(!ok){
+    if(driveEl) driveEl.innerHTML = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span class="red">⚠️</span><span>No se pudo conectar (¿cerraste el popup?)</span>
+      <button class="btn btn-sm btn-p" id="btn-conectar-salir" onclick="cvConectarYSubirDesdeSalir(${mobile})">🔄 Reintentar</button>
+    </div>`;
+    return;
+  }
+  if(driveEl) driveEl.innerHTML = '<span>⏳</span><span>Conectado — subiendo backup...</span>';
+  try{
+    if(DEV_MODE){
+      if(!mobile){
+        await DriveSync.subirBackupHistorico(DB);
+        driveEl.innerHTML = '<span class="green">☁️</span><span>Backup histórico guardado en carpeta DEV</span>';
+      } else {
+        driveEl.innerHTML = '<span class="amber">🔒</span><span>DEV es de solo lectura para el archivo en vivo — no se sube nada a PROD</span>';
+      }
+    } else {
+      if(mobile) await cvSubirDriveMobil();
+      else await cvSubirDrive();
+      driveEl.innerHTML = '<span class="green">☁️</span><span>Backup subido a Drive</span>';
+    }
+  } catch(e){
+    driveEl.innerHTML = `<span class="red">⚠️</span><span>Drive falló: ${escHtml(e.message)}</span>`;
+  }
+}
+
 
 function cvCerrarAppFinal(){
   window.close();
@@ -244,9 +346,9 @@ async function cvSubirDrive(){
   catch(e){ console.error('Error subiendo a Drive:', e); }
 }
 
-async function cvSincronizarDrive(){
-  if(typeof DriveSync === 'undefined'){ alert('Drive Sync no disponible.'); return; }
-  if(!DriveSync.conectado){ DriveSync.conectar(); return; }
+async function cvSincronizarDrive(silencioso){
+  if(typeof DriveSync === 'undefined'){ if(!silencioso) alert('Drive Sync no disponible.'); return; }
+  if(!DriveSync.conectado){ if(!silencioso) DriveSync.conectar(); return; }
   try{
     const remoto = await DriveSync.bajarBackup();
     if(remoto && typeof remoto === 'object' && Object.keys(remoto).length){
@@ -264,15 +366,15 @@ async function cvSincronizarDrive(){
       save();
     }
     if(DEV_MODE){
-      alert('✅ Datos actualizados desde PROD (solo lectura — DEV nunca sube nada a Drive).');
+      if(!silencioso) alert('✅ Datos actualizados desde PROD (solo lectura — DEV nunca sube nada a Drive).');
     } else {
       await DriveSync.subirBackup(DB);
-      alert('✅ Sincronizado con Drive.');
+      if(!silencioso) alert('✅ Sincronizado con Drive.');
     }
     goTo(_currentView || 'dashboard');
   } catch(e){
     console.error(e);
-    alert('⚠️ Error al sincronizar: '+e.message);
+    if(!silencioso) alert('⚠️ Error al sincronizar: '+e.message);
   }
 }
 
@@ -310,16 +412,16 @@ async function cvSubirDriveMobil(){
   catch(e){ console.error('Error subiendo a Drive (celu):', e); }
 }
 
-async function cvSincronizarDriveMobil(){
-  if(typeof DriveSync === 'undefined'){ alert('Drive Sync no disponible.'); return; }
-  if(!DriveSync.conectado){ DriveSync.conectar(); return; }
+async function cvSincronizarDriveMobil(silencioso){
+  if(typeof DriveSync === 'undefined'){ if(!silencioso) alert('Drive Sync no disponible.'); return; }
+  if(!DriveSync.conectado){ if(!silencioso) DriveSync.conectar(); return; }
   try{
     await cvSubirDriveMobil();
-    alert('✅ Sincronizado con Drive.');
+    if(!silencioso) alert('✅ Sincronizado con Drive.');
     renderVistaRapidaMobile();
   } catch(e){
     console.error(e);
-    alert('⚠️ Error al sincronizar: '+e.message);
+    if(!silencioso) alert('⚠️ Error al sincronizar: '+e.message);
   }
 }
 
@@ -542,9 +644,9 @@ function registrarCarga(datos){
   const tanqueLleno = !!datos.tanqueLleno;
   const tipoCombustible = datos.tipoCombustible || '';
   const marca = datos.marca || '';
-  // ubicacion: {lat,lng} capturada por GPS al momento de cargar desde el
-  // celular (opcional — undefined/null si no está disponible o si la carga
-  // se hizo desde la PC).
+  // ubicacion: {lat,lng,direccion} capturada por GPS + reverse geocoding
+  // (Nominatim) al momento de cargar desde el celular (opcional —
+  // undefined/null si no está disponible o si la carga se hizo desde la PC).
   const ubicacion = datos.ubicacion || null;
 
   const nuevaCarga = tocar({
@@ -2332,16 +2434,40 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if(typeof DriveSync !== 'undefined'){
-    DriveSync.init(() => { console.log('Drive listo'); });
+    DriveSync.init(() => { console.log('Drive listo'); cvActualizarBotonDriveTopbar(); });
+    cvActualizarBotonDriveTopbar();
     if(DriveSync.onToken){
       DriveSync.onToken(() => {
         // Se conectó (o se renovó el token): refrescar la vista actual para
         // que "No conectado" pase a "Conectado" sin que el usuario tenga que
         // hacer nada más.
+        cvActualizarBotonDriveTopbar();
         if(!esMobile() || _modoAppCompleta) goTo(_currentView || 'backup');
         cvBackupHistoricoSiCorresponde();
       });
     }
+
+    // Auto-sync silencioso al abrir la app: apenas Drive queda conectado
+    // (con token guardado o reconexión silenciosa), sincroniza solo, sin
+    // botón ni alertas — tanto en la app de PC como en la carga rápida del
+    // celular. Se intenta por unos segundos porque la reconexión silenciosa
+    // de Google puede tardar un instante en resolver.
+    let _autoSyncHecho = false;
+    let _intentosAutoSync = 0;
+    const _autoSyncTimer = setInterval(() => {
+      _intentosAutoSync++;
+      if(DriveSync.conectado && !_autoSyncHecho){
+        _autoSyncHecho = true;
+        clearInterval(_autoSyncTimer);
+        if(esMobile()){
+          cvSincronizarDriveMobil(true);
+        } else {
+          cvSincronizarDrive(true);
+        }
+      } else if(_intentosAutoSync > 20){ // ~5s máximo esperando la reconexión silenciosa
+        clearInterval(_autoSyncTimer);
+      }
+    }, 250);
   }
 
   // Safe-close: snapshot automático + Drive
