@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.57-dev';
+const VERSION = 'v0.58-dev';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -729,6 +729,12 @@ function kpiGastoCombustibleMes(vehiculoId){
   return sumar(DB.cargas.filter(c=>!c._deleted && c.vehiculoId===vehiculoId && new Date(c.fecha)>=inicioMes).map(c=>c.totalPagado));
 }
 
+// KPI: acumulado $ gastado en cargas de combustible en el año calendario actual
+function kpiGastoCombustibleAnio(vehiculoId){
+  const inicioAnio = new Date(); inicioAnio.setMonth(0,1); inicioAnio.setHours(0,0,0,0);
+  return sumar(DB.cargas.filter(c=>!c._deleted && c.vehiculoId===vehiculoId && new Date(c.fecha)>=inicioAnio).map(c=>c.totalPagado));
+}
+
 // ── MANTENIMIENTOS ────────────────────────────────────────────────────────────
 function crearMantenimientoProgramado(datos){
   const m = tocar({
@@ -1275,6 +1281,7 @@ function renderDashboard(){
   const rendProm = kpiRendimientoPromedio3Meses(v.uuid);
   const rendUlt = kpiUltimoRendimiento(v.uuid);
   const gastoMes = kpiGastoCombustibleMes(v.uuid);
+  const gastoAnio = kpiGastoCombustibleAnio(v.uuid);
 
   // Costo por km: últimos 12 meses por defecto
   const hasta = hoyISO();
@@ -1298,6 +1305,7 @@ function renderDashboard(){
       <div class="stat"><div class="stat-n">${rendUlt ? fmtNum(rendUlt,1) : '—'}</div><div class="stat-l">Último rendim. (km/L)</div>${rendUlt?`<div style="font-size:10px;color:var(--text2);margin-top:2px">${fmtNum(litrosPor100Km(rendUlt),1)} L/100km</div>`:''}</div>
       <div class="stat"><div class="stat-n">${rendProm ? fmtNum(rendProm,1) : '—'}</div><div class="stat-l">Promedio 3 meses</div>${rendProm?`<div style="font-size:10px;color:var(--text2);margin-top:2px">${fmtNum(litrosPor100Km(rendProm),1)} L/100km</div>`:''}</div>
       <div class="stat"><div class="stat-n">${fmtMoney(gastoMes)}</div><div class="stat-l">Combustible este mes</div></div>
+      <div class="stat"><div class="stat-n">${fmtMoney(gastoAnio)}</div><div class="stat-l">Combustible acumulado ${new Date().getFullYear()}</div></div>
       <div class="stat"><div class="stat-n">${costoKm ? fmtMoney(costoKm.costoPorKmTotal) : '—'}</div><div class="stat-l">Costo / km (12m)</div></div>
     </div>
 
