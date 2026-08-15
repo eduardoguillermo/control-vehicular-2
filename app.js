@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.58-dev';
+const VERSION = 'v0.59-dev';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -25,6 +25,7 @@ let DB = {
   cargas: [],
   mantenimientosProgramados: [],
   mantenimientosRealizados: [],
+  novedades: [],
   componentes: [],
   gastosFijos: [],
   gastosVariables: [],
@@ -43,7 +44,7 @@ function cvNuevoUUID(){
 
 function normalizarDB(){
   if(!DB.nid) DB.nid = 1;
-  ['vehiculos','cargas','mantenimientosProgramados','mantenimientosRealizados','componentes','gastosFijos','gastosVariables','alertas']
+  ['vehiculos','cargas','mantenimientosProgramados','mantenimientosRealizados','novedades','componentes','gastosFijos','gastosVariables','alertas']
     .forEach(k => { if(!DB[k]) DB[k] = []; });
   if(!DB.tiposComponenteCustom) DB.tiposComponenteCustom = [];
   if(!DB.marcasCombustibleCustom) DB.marcasCombustibleCustom = [];
@@ -53,7 +54,7 @@ function normalizarDB(){
   if(!DB.config.umbralPorcentajeAvisoVencimiento) DB.config.umbralPorcentajeAvisoVencimiento = DEFAULT_UMBRAL_PORCENTAJE_AVISO_VENCIMIENTO;
 
   // Backfill uuid/lastModified para todas las colecciones (necesario para merge Drive)
-  ['vehiculos','cargas','mantenimientosProgramados','mantenimientosRealizados','componentes','gastosFijos','gastosVariables','alertas']
+  ['vehiculos','cargas','mantenimientosProgramados','mantenimientosRealizados','novedades','componentes','gastosFijos','gastosVariables','alertas']
     .forEach(k => DB[k].forEach(r => {
       if(!r.uuid) r.uuid = cvNuevoUUID();
       if(!r.lastModified) r.lastModified = Date.now();
@@ -335,7 +336,7 @@ async function cvSubirDrive(){
   try{
     const remoto = await DriveSync.bajarBackup();
     if(remoto && typeof remoto === 'object' && Object.keys(remoto).length){
-      ['vehiculos','cargas','mantenimientosProgramados','mantenimientosRealizados','componentes','gastosFijos','gastosVariables','alertas']
+      ['vehiculos','cargas','mantenimientosProgramados','mantenimientosRealizados','novedades','componentes','gastosFijos','gastosVariables','alertas']
         .forEach(k => { DB[k] = cvMergeColeccion(DB[k], remoto[k]); });
       if(remoto.nid && remoto.nid > DB.nid) DB.nid = remoto.nid;
       normalizarDB();
@@ -358,7 +359,7 @@ async function cvSincronizarDrive(silencioso){
       if(DEV_MODE){
         DB = remoto;
       } else {
-        ['vehiculos','cargas','mantenimientosProgramados','mantenimientosRealizados','componentes','gastosFijos','gastosVariables','alertas']
+        ['vehiculos','cargas','mantenimientosProgramados','mantenimientosRealizados','novedades','componentes','gastosFijos','gastosVariables','alertas']
           .forEach(k => { DB[k] = cvMergeColeccion(DB[k], remoto[k]); });
         if(remoto.nid && remoto.nid > DB.nid) DB.nid = remoto.nid;
       }
@@ -385,7 +386,7 @@ async function cvSincronizarDrive(silencioso){
 // app completa), no debe poder pisarlas ni "resucitar" datos viejos en
 // Drive. El celular es de solo lectura para todo lo que no sea `cargas`;
 // para `cargas` sí aporta lo nuevo, mergeado por uuid/lastModified.
-const COLECCIONES_SOLO_PC = ['vehiculos','mantenimientosProgramados','mantenimientosRealizados','componentes','gastosFijos','gastosVariables','alertas'];
+const COLECCIONES_SOLO_PC = ['vehiculos','mantenimientosProgramados','mantenimientosRealizados','novedades','componentes','gastosFijos','gastosVariables','alertas'];
 
 async function cvSubirDriveMobil(){
   if(typeof DriveSync === 'undefined' || !DriveSync.conectado) return;
@@ -456,7 +457,7 @@ async function cvBorrarTodo(){
 
   DB = {
     nid: 1,
-    vehiculos: [], cargas: [], mantenimientosProgramados: [], mantenimientosRealizados: [],
+    vehiculos: [], cargas: [], mantenimientosProgramados: [], mantenimientosRealizados: [], novedades: [],
     componentes: [], gastosFijos: [], gastosVariables: [], alertas: [],
     tiposComponenteCustom: [],
     config: { vehiculoActivo: null }
@@ -589,7 +590,7 @@ function editarVehiculo(uuid, datos){
 function eliminarVehiculo(uuid){
   if(!confirm('¿Eliminar este vehículo y TODOS sus datos asociados (cargas, mantenimientos, componentes, gastos)? Esta acción no se puede deshacer.')) return;
   DB.vehiculos = DB.vehiculos.filter(v=>v.uuid!==uuid);
-  ['cargas','mantenimientosProgramados','mantenimientosRealizados','componentes','gastosFijos','gastosVariables','alertas']
+  ['cargas','mantenimientosProgramados','mantenimientosRealizados','novedades','componentes','gastosFijos','gastosVariables','alertas']
     .forEach(k => { DB[k] = DB[k].filter(r => r.vehiculoId !== uuid); });
   if(DB.config.vehiculoActivo === uuid) DB.config.vehiculoActivo = DB.vehiculos[0] ? DB.vehiculos[0].uuid : null;
   save();
@@ -783,6 +784,7 @@ function registrarMantenimientoRealizado(datos){
     uuid: cvNuevoUUID(),
     mantenimientoProgramadoId: datos.mantenimientoProgramadoId || null,
     nombreLibre: datos.nombreLibre || '', // solo se usa cuando no hay mantenimientoProgramadoId (mantenimiento a demanda)
+    origenNovedadId: datos.origenNovedadId || null, // si viene de resolver una novedad, referencia a DB.novedades
     vehiculoId: datos.vehiculoId,
     kilometraje_realizado: Number(datos.kilometraje_realizado),
     fecha: datos.fecha || hoyISO(),
@@ -801,9 +803,98 @@ function registrarMantenimientoRealizado(datos){
 }
 function eliminarMantenimientoRealizado(uuid){
   if(!confirm('¿Eliminar este registro de mantenimiento realizado?')) return;
+  const r = DB.mantenimientosRealizados.find(m=>m.uuid===uuid);
+  // Si este registro vino de resolver una novedad, la novedad vuelve a quedar pendiente
+  if(r && r.origenNovedadId){
+    const nov = DB.novedades.find(n=>n.uuid===r.origenNovedadId);
+    if(nov){
+      Object.assign(nov, { fecha_solucion:null, km_solucion:null, costo:0, mantenimientoRealizadoId:null });
+      tocar(nov);
+    }
+  }
   DB.mantenimientosRealizados = DB.mantenimientosRealizados.filter(m=>m.uuid!==uuid);
   save();
   goTo('mantenimientos');
+}
+
+// ── NOVEDADES / FALLAS ────────────────────────────────────────────────────────
+// Registro de problemas detectados en el auto (ruidos, testigos, pérdidas, etc.)
+// que todavía no fueron atendidos. A diferencia de un mantenimiento a demanda
+// (que ya se hizo), una novedad puede quedar "pendiente" un tiempo antes de
+// resolverse. Al resolverla se genera automáticamente un mantenimientoRealizado
+// "a demanda" para que el costo sume al $/km igual que cualquier otro
+// mantenimiento, sin duplicar la lógica de costoPorKm/gastoTotalDelPeriodo.
+function novedadesDeVehiculo(vehiculoId){
+  return DB.novedades.filter(n=>n.vehiculoId===vehiculoId).sort((a,b)=>new Date(b.fecha_ocurrencia)-new Date(a.fecha_ocurrencia));
+}
+function novedadesPendientes(vehiculoId){
+  return novedadesDeVehiculo(vehiculoId).filter(n=>!n.fecha_solucion);
+}
+
+function crearNovedad(datos){
+  const n = tocar({
+    uuid: cvNuevoUUID(),
+    vehiculoId: datos.vehiculoId,
+    descripcion: datos.descripcion,
+    gravedad: datos.gravedad, // 'baja' | 'media' | 'alta' | 'critica'
+    fecha_ocurrencia: datos.fecha_ocurrencia || hoyISO(),
+    km_ocurrencia: Number(datos.km_ocurrencia),
+    fecha_solucion: null,
+    km_solucion: null,
+    costo: 0,
+    mantenimientoRealizadoId: null
+  });
+  DB.novedades.push(n);
+  save();
+  return n;
+}
+function editarNovedad(uuid, datos){
+  const n = DB.novedades.find(x=>x.uuid===uuid);
+  if(!n) return;
+  Object.assign(n, {
+    descripcion: datos.descripcion,
+    gravedad: datos.gravedad,
+    fecha_ocurrencia: datos.fecha_ocurrencia,
+    km_ocurrencia: Number(datos.km_ocurrencia)
+  });
+  tocar(n); save();
+}
+function eliminarNovedad(uuid){
+  if(!confirm('¿Eliminar esta novedad? Si ya fue resuelta, también se borra el registro de mantenimiento asociado.')) return;
+  const n = DB.novedades.find(x=>x.uuid===uuid);
+  if(n && n.mantenimientoRealizadoId){
+    DB.mantenimientosRealizados = DB.mantenimientosRealizados.filter(m=>m.uuid!==n.mantenimientoRealizadoId);
+  }
+  DB.novedades = DB.novedades.filter(x=>x.uuid!==uuid);
+  save();
+  goTo('mantenimientos');
+}
+function resolverNovedad(uuid, datos){
+  const n = DB.novedades.find(x=>x.uuid===uuid);
+  if(!n) return;
+  const costo = Number(datos.costo)||0;
+  const fecha_solucion = datos.fecha_solucion || hoyISO();
+  const km_solucion = Number(datos.km_solucion);
+  // Genera el mantenimiento realizado que suma al costo por km, igual que un
+  // mantenimiento a demanda cualquiera.
+  const realizado = registrarMantenimientoRealizado({
+    mantenimientoProgramadoId: null,
+    nombreLibre: '⚠️ ' + n.descripcion,
+    origenNovedadId: n.uuid,
+    vehiculoId: n.vehiculoId,
+    kilometraje_realizado: km_solucion,
+    fecha: fecha_solucion,
+    notas: datos.notas || '',
+    costo
+  });
+  Object.assign(n, { fecha_solucion, km_solucion, costo, mantenimientoRealizadoId: realizado.uuid });
+  tocar(n); save();
+}
+function etiquetaGravedad(g){
+  return { baja:'Baja', media:'Media', alta:'Alta', critica:'Crítica' }[g] || g;
+}
+function claseGravedad(g){
+  return { baja:'g-baja', media:'g-media', alta:'g-alta', critica:'g-critica' }[g] || '';
 }
 
 // Cruce de km con mantenimientos programados. Se ejecuta al cargar combustible.
@@ -1556,12 +1647,33 @@ function renderMantenimientos(){
   const v = vehiculoActivo();
   const km = kmActualVehiculo(v.uuid);
   document.getElementById('pacts').innerHTML = `
+    <button class="btn btn-sm" style="border-color:#d29922;color:#d29922" onclick="modalNuevaNovedad()">+ Novedad</button>
     <button class="btn btn-sm" onclick="modalMantenimientoADemanda()">+ A demanda</button>
     <button class="btn btn-p btn-sm" onclick="modalNuevoMantenimientoProgramado()">+ Programar servicio</button>
   `;
   const progs = DB.mantenimientosProgramados.filter(p=>p.vehiculoId===v.uuid);
+  const pendientes = novedadesPendientes(v.uuid);
 
   document.getElementById('content').innerHTML = `
+    <div class="card">
+      <div class="ch"><div class="ct">⚠️ Novedades pendientes${pendientes.length?` <span class="text2" style="font-weight:400">(${pendientes.length})</span>`:''}</div></div>
+      <div class="card-body twrap">
+        ${!pendientes.length ? `<div class="empty">Sin novedades pendientes.</div>` : `
+        <table><thead><tr><th>Descripción</th><th>Gravedad</th><th>Ocurrida</th><th></th></tr></thead><tbody>
+        ${pendientes.map(n=>`<tr>
+            <td>${escHtml(n.descripcion)}</td>
+            <td><span class="pill ${claseGravedad(n.gravedad)}">${etiquetaGravedad(n.gravedad)}</span></td>
+            <td class="mono">${fmtFecha(n.fecha_ocurrencia)} · ${fmtKm(n.km_ocurrencia)}</td>
+            <td style="white-space:nowrap">
+              <button class="btn btn-sm btn-g" onclick="modalResolverNovedad('${n.uuid}')">✓ Resolver</button>
+              <button class="btn btn-sm" onclick="modalEditarNovedad('${n.uuid}')">✎</button>
+              <button class="btn btn-sm btn-d" onclick="eliminarNovedad('${n.uuid}')">✕</button>
+            </td>
+          </tr>`).join('')}
+        </tbody></table>`}
+      </div>
+    </div>
+
     <div class="card">
       <div class="ch"><div class="ct">🔧 Servicios programados</div></div>
       <div class="card-body twrap">
@@ -1602,7 +1714,10 @@ function renderHistorialMantenimientos(vehiculoId){
   return `<table><thead><tr><th>Fecha</th><th>Servicio</th><th>Km</th><th>Costo</th><th>Notas</th><th></th></tr></thead><tbody>
     ${realizados.map(r=>{
       const prog = DB.mantenimientosProgramados.find(p=>p.uuid===r.mantenimientoProgramadoId);
-      const nombre = prog ? escHtml(prog.nombre_servicio) : (r.nombreLibre ? escHtml(r.nombreLibre)+' <span class="text3" style="font-size:10px">(a demanda)</span>' : '—');
+      const tag = r.origenNovedadId
+        ? ' <span style="background:rgba(210,153,34,.1);color:#d29922;border:1px solid rgba(210,153,34,.25);border-radius:4px;padding:1px 5px;font-size:10px;font-weight:700">novedad</span>'
+        : (prog ? '' : ' <span class="text3" style="font-size:10px">(a demanda)</span>');
+      const nombre = prog ? escHtml(prog.nombre_servicio) : (r.nombreLibre ? escHtml(r.nombreLibre)+tag : '—');
       return `<tr>
         <td class="mono">${fmtFecha(r.fecha)}</td>
         <td>${nombre}</td>
@@ -1714,6 +1829,106 @@ function guardarMantenimientoADemanda(){
   if(costoRaw === ''){ alert('Ingresá el costo del servicio (poné 0 si fue sin cargo).'); return; }
   const costo = Number(costoRaw);
   registrarMantenimientoRealizado({ mantenimientoProgramadoId: null, nombreLibre, vehiculoId: v.uuid, kilometraje_realizado, costo, fecha, notas });
+  cerrarModal(); goTo('mantenimientos');
+}
+
+function modalNuevaNovedad(){
+  const v = vehiculoActivo();
+  const kmSugerido = kmActualVehiculo(v.uuid);
+  abrirModal('⚠️ Nueva novedad', `
+    <div class="fg"><label>Descripción</label><textarea id="f-descripcion" placeholder="Ej: ruido metálico en tren delantero al frenar"></textarea></div>
+    <div class="fgrid">
+      <div class="fg"><label>Fecha ocurrencia</label><input type="date" id="f-fecha" value="${new Date().toISOString().slice(0,10)}"></div>
+      <div class="fg"><label>Km ocurrencia</label><input type="number" inputmode="numeric" id="f-km" value="${kmSugerido||''}" onfocus="this.select()"></div>
+    </div>
+    <div class="fg">
+      <label>Gravedad</label>
+      <select id="f-gravedad">
+        <option value="baja">Baja</option>
+        <option value="media" selected>Media</option>
+        <option value="alta">Alta</option>
+        <option value="critica">Crítica</option>
+      </select>
+    </div>
+  `, `
+    <button class="btn" onclick="cerrarModal()">Cancelar</button>
+    <button class="btn btn-p" onclick="guardarNuevaNovedad()">Guardar</button>
+  `);
+  setTimeout(()=>document.getElementById('f-descripcion').focus(), 50);
+}
+function guardarNuevaNovedad(){
+  const v = vehiculoActivo();
+  const descripcion = document.getElementById('f-descripcion').value.trim();
+  const km_ocurrencia = Number(document.getElementById('f-km').value);
+  const fecha_ocurrencia = new Date(document.getElementById('f-fecha').value).toISOString();
+  const gravedad = document.getElementById('f-gravedad').value;
+  if(!descripcion){ alert('Describí la novedad.'); return; }
+  if(!km_ocurrencia){ alert('Ingresá el kilometraje.'); return; }
+  crearNovedad({ vehiculoId: v.uuid, descripcion, km_ocurrencia, fecha_ocurrencia, gravedad });
+  cerrarModal(); goTo('mantenimientos');
+}
+
+function modalEditarNovedad(uuid){
+  const n = DB.novedades.find(x=>x.uuid===uuid);
+  if(!n) return;
+  abrirModal('✎ Editar novedad', `
+    <div class="fg"><label>Descripción</label><textarea id="f-descripcion">${escHtml(n.descripcion)}</textarea></div>
+    <div class="fgrid">
+      <div class="fg"><label>Fecha ocurrencia</label><input type="date" id="f-fecha" value="${n.fecha_ocurrencia.slice(0,10)}"></div>
+      <div class="fg"><label>Km ocurrencia</label><input type="number" inputmode="numeric" id="f-km" value="${n.km_ocurrencia}"></div>
+    </div>
+    <div class="fg">
+      <label>Gravedad</label>
+      <select id="f-gravedad">
+        <option value="baja" ${n.gravedad==='baja'?'selected':''}>Baja</option>
+        <option value="media" ${n.gravedad==='media'?'selected':''}>Media</option>
+        <option value="alta" ${n.gravedad==='alta'?'selected':''}>Alta</option>
+        <option value="critica" ${n.gravedad==='critica'?'selected':''}>Crítica</option>
+      </select>
+    </div>
+  `, `
+    <button class="btn" onclick="cerrarModal()">Cancelar</button>
+    <button class="btn btn-p" onclick="guardarEdicionNovedad('${uuid}')">Guardar</button>
+  `);
+}
+function guardarEdicionNovedad(uuid){
+  const descripcion = document.getElementById('f-descripcion').value.trim();
+  const km_ocurrencia = Number(document.getElementById('f-km').value);
+  const fecha_ocurrencia = new Date(document.getElementById('f-fecha').value).toISOString();
+  const gravedad = document.getElementById('f-gravedad').value;
+  if(!descripcion){ alert('Describí la novedad.'); return; }
+  if(!km_ocurrencia){ alert('Ingresá el kilometraje.'); return; }
+  editarNovedad(uuid, { descripcion, km_ocurrencia, fecha_ocurrencia, gravedad });
+  cerrarModal(); goTo('mantenimientos');
+}
+
+function modalResolverNovedad(uuid){
+  const n = DB.novedades.find(x=>x.uuid===uuid);
+  if(!n) return;
+  const v = vehiculoActivo();
+  const kmSugerido = kmActualVehiculo(v.uuid);
+  abrirModal(`✓ Resolver novedad`, `
+    <p class="text2" style="font-size:12px;margin-bottom:10px">${escHtml(n.descripcion)}</p>
+    <div class="fgrid">
+      <div class="fg"><label>Fecha solución</label><input type="date" id="f-fecha" value="${new Date().toISOString().slice(0,10)}"></div>
+      <div class="fg"><label>Km solución</label><input type="number" inputmode="numeric" id="f-km" value="${kmSugerido||''}" onfocus="this.select()"></div>
+    </div>
+    <div class="fg"><label>Costo</label><input type="number" inputmode="decimal" id="f-costo" step="0.01" placeholder="$"></div>
+    <div class="fg"><label>Notas</label><textarea id="f-notas" placeholder="Opcional"></textarea></div>
+    <p class="text3" style="font-size:10px">Al guardar se agrega al Historial de mantenimientos y suma al $/km.</p>
+  `, `
+    <button class="btn" onclick="cerrarModal()">Cancelar</button>
+    <button class="btn btn-p" onclick="guardarResolucionNovedad('${uuid}')">Guardar</button>
+  `);
+}
+function guardarResolucionNovedad(uuid){
+  const km_solucion = Number(document.getElementById('f-km').value);
+  const costoRaw = document.getElementById('f-costo').value;
+  const fecha_solucion = new Date(document.getElementById('f-fecha').value).toISOString();
+  const notas = document.getElementById('f-notas').value.trim();
+  if(!km_solucion){ alert('Ingresá el kilometraje.'); return; }
+  if(costoRaw === ''){ alert('Ingresá el costo (poné 0 si fue sin cargo).'); return; }
+  resolverNovedad(uuid, { km_solucion, costo: Number(costoRaw), fecha_solucion, notas });
   cerrarModal(); goTo('mantenimientos');
 }
 
