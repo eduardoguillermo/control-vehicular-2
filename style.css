@@ -173,6 +173,8 @@ tr:hover td{background:rgba(255,255,255,.02)}
   .nav-overlay.open{display:block}
   .nav-toggle{display:block}
   .main{width:100%}
+  .topbar{flex-wrap:wrap;row-gap:8px}
+  .pacts{width:100%;order:3}
 }
 
 /* ── PROGRESS (vida útil componentes) ────────────────────── */
