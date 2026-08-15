@@ -91,6 +91,8 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .btn-g:hover{background:#1f5a1f}
 .btn-d{background:#4a1a1a;color:#f85149;border-color:#6a2d2d}
 .btn-d:hover{background:#5a1f1f}
+.btn-e{background:#173a52;color:#58a6ff;border-color:#2a5478}
+.btn-e:hover{background:#1e4a68}
 .btn-sm{padding:3px 8px;font-size:11px}
 
 /* ── MODAL ────────────────────────────────────────────────── */
