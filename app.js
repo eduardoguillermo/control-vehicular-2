@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.64-dev';
+const VERSION = 'v0.65-dev';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -1700,7 +1700,9 @@ function renderMantenimientos(){
             <td>${ultimo ? fmtKm(ultimo.kilometraje_realizado)+' · '+fmtFecha(ultimo.fecha) : '—'}</td>
             <td class="${faltan<=0?'red':(faltan<1000?'amber':'')}">${fmtKm(proximoKm)} ${faltan<=0?'⚠️':''}</td>
             <td style="white-space:nowrap">
-              <button class="btn btn-sm btn-g" onclick="modalRegistrarMantenimiento('${p.uuid}')">✓ Registrar</button>
+              ${faltan<=0
+                ? `<button class="btn btn-sm btn-g" onclick="modalRegistrarMantenimiento('${p.uuid}')">✓ Registrar</button>`
+                : `<span class="text3" style="font-size:11px">Faltan ${fmtKm(faltan)}</span>`}
               <button class="btn btn-sm btn-e" onclick="modalEditarMantenimientoProgramado('${p.uuid}')">✎</button>
               <button class="btn btn-sm btn-d" onclick="eliminarMantenimientoProgramado('${p.uuid}')">✕</button>
             </td>
