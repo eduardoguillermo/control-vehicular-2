@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.62-dev';
+const VERSION = 'v0.64-dev';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -929,7 +929,7 @@ function verificarMantenimientos(vehiculoId, kmActual){
           proximoKmEsperado: proximoKm,
           fecha: hoyISO(),
           atendida: false,
-          mensaje: `🔧 Toca "${prog.nombre_servicio}" (programado a los ${fmtKm(proximoKm)}, ya llevás ${fmtKm(kmActual)})`
+          mensaje: `🔧️ Toca "${prog.nombre_servicio}" (programado a los ${fmtKm(proximoKm)}, ya llevás ${fmtKm(kmActual)})`
         });
         DB.alertas.push(alerta);
         disparadas.push(alerta);
@@ -1419,7 +1419,7 @@ function renderDashboard(){
     </div>
 
     <div class="card">
-      <div class="ch"><div class="ct">🔧 Próximos mantenimientos</div></div>
+      <div class="ch"><div class="ct">🔧️ Próximos mantenimientos</div></div>
       <div class="card-body twrap">
         ${renderTablaProximosMantenimientos(v.uuid, km)}
       </div>
@@ -1511,7 +1511,7 @@ function renderCombustible(){
         <td>${fmtRendimiento(c.rendimiento_calculado)}</td>
         <td>${c.ubicacion ? `<a href="https://www.google.com/maps?q=${c.ubicacion.lat},${c.ubicacion.lng}" target="_blank" rel="noopener" title="${c.ubicacion.direccion ? escHtml(c.ubicacion.direccion) : 'Ver ubicación en el mapa'}">📍</a>` : '—'}</td>
         <td style="white-space:nowrap">
-          <button class="btn btn-sm" onclick="modalEditarCarga('${c.uuid}')">✎</button>
+          <button class="btn btn-sm btn-e" onclick="modalEditarCarga('${c.uuid}')">✎</button>
           <button class="btn btn-sm btn-d" onclick="eliminarCarga('${c.uuid}')">✕</button>
         </td>
       </tr>`).join('')}
@@ -1677,7 +1677,7 @@ function renderMantenimientos(){
             <td class="mono">${fmtFecha(n.fecha_ocurrencia)} · ${fmtKm(n.km_ocurrencia)}</td>
             <td style="white-space:nowrap">
               <button class="btn btn-sm btn-g" onclick="modalResolverNovedad('${n.uuid}')">✓ Resolver</button>
-              <button class="btn btn-sm" onclick="modalEditarNovedad('${n.uuid}')">✎</button>
+              <button class="btn btn-sm btn-e" onclick="modalEditarNovedad('${n.uuid}')">✎</button>
               <button class="btn btn-sm btn-d" onclick="eliminarNovedad('${n.uuid}')">✕</button>
             </td>
           </tr>`).join('')}
@@ -1686,7 +1686,7 @@ function renderMantenimientos(){
     </div>
 
     <div class="card">
-      <div class="ch"><div class="ct">🔧 Servicios programados</div></div>
+      <div class="ch"><div class="ct">🔧️ Servicios programados</div></div>
       <div class="card-body twrap">
         ${!progs.length ? `<div class="empty">No hay servicios programados todavía.</div>` : `
         <table><thead><tr><th>Servicio</th><th>Intervalo</th><th>Último realizado</th><th>Próximo km</th><th></th></tr></thead><tbody>
@@ -1701,7 +1701,7 @@ function renderMantenimientos(){
             <td class="${faltan<=0?'red':(faltan<1000?'amber':'')}">${fmtKm(proximoKm)} ${faltan<=0?'⚠️':''}</td>
             <td style="white-space:nowrap">
               <button class="btn btn-sm btn-g" onclick="modalRegistrarMantenimiento('${p.uuid}')">✓ Registrar</button>
-              <button class="btn btn-sm" onclick="modalEditarMantenimientoProgramado('${p.uuid}')">✎</button>
+              <button class="btn btn-sm btn-e" onclick="modalEditarMantenimientoProgramado('${p.uuid}')">✎</button>
               <button class="btn btn-sm btn-d" onclick="eliminarMantenimientoProgramado('${p.uuid}')">✕</button>
             </td>
           </tr>`;
@@ -1743,14 +1743,20 @@ function renderHistorialMantenimientos(vehiculoId){
 
 function modalNuevoMantenimientoProgramado(){
   if(esMobile()){ alert('⚠️ Los mantenimientos y novedades se cargan desde la PC. En el celular los cambios no se preservan (Drive los sincroniza como solo lectura), para evitar perder el historial si el cel tiene datos viejos.'); return; }
-  abrirModal('🔧 Programar servicio', `
-    <div class="fg"><label>Nombre del servicio</label><input type="text" id="f-nombre" placeholder="Ej: Cambio de aceite"></div>
-    <div class="fg"><label>Intervalo (cada cuántos km)</label><input type="number" inputmode="numeric" id="f-intervalo" placeholder="Ej: 10000"></div>
-    <div class="fg"><label>Notas</label><textarea id="f-notas" placeholder="Opcional"></textarea></div>
+  abrirModal('🔧️ Programar servicio', `
+    <div class="fg"><label>Nombre del servicio</label><input type="text" id="f-nombre" placeholder="Ej: Cambio de aceite" autocomplete="off" value=""></div>
+    <div class="fg"><label>Intervalo (cada cuántos km)</label><input type="number" inputmode="numeric" id="f-intervalo" placeholder="Ej: 10000" autocomplete="off" value=""></div>
+    <div class="fg"><label>Notas</label><textarea id="f-notas" placeholder="Opcional" autocomplete="off"></textarea></div>
   `, `
     <button class="btn" onclick="cerrarModal()">Cancelar</button>
     <button class="btn btn-p" onclick="guardarNuevoMantenimientoProgramado()">Guardar</button>
   `);
+  setTimeout(()=>{
+    // Por si el navegador igual intenta autocompletar con datos de otro
+    // servicio ya cargado (los ids se reutilizan entre modales de la app).
+    ['f-nombre','f-intervalo','f-notas'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+    document.getElementById('f-nombre').focus();
+  }, 60);
 }
 function guardarNuevoMantenimientoProgramado(){
   const v = vehiculoActivo();
@@ -1812,7 +1818,7 @@ function modalMantenimientoADemanda(){
   if(esMobile()){ alert('⚠️ Los mantenimientos y novedades se cargan desde la PC. En el celular los cambios no se preservan (Drive los sincroniza como solo lectura), para evitar perder el historial si el cel tiene datos viejos.'); return; }
   const v = vehiculoActivo();
   const kmSugerido = kmActualVehiculo(v.uuid);
-  abrirModal('🔧 Mantenimiento a demanda', `
+  abrirModal('🔧️ Mantenimiento a demanda', `
     <div class="fg">
       <label>Servicio realizado</label>
       <input type="text" id="f-nombreLibre" list="sugerencias-demanda" placeholder="Ej: Cambio de lámpara">
@@ -1985,7 +1991,7 @@ function renderComponentes(){
                   <div class="text3" style="font-size:11px">Instalado: ${fmtKm(c.km_instalacion)} · ${fmtFecha(c.fecha_instalacion)}${c.km_instalacion_estimado?' <span class="amber">⚠️ estimado</span>':' ✅'}</div>
                 </div>
                 <div style="text-align:right">
-                  <button class="btn btn-sm" onclick="modalEditarComponente('${c.uuid}')">✎ Editar</button>
+                  <button class="btn btn-sm btn-e" onclick="modalEditarComponente('${c.uuid}')">✎ Editar</button>
                   <button class="btn btn-sm btn-g" onclick="modalReemplazarComponente('${c.uuid}')">🔄 Reemplazar</button>
                   <button class="btn btn-sm btn-d" onclick="eliminarComponente('${c.uuid}')">✕</button>
                 </div>
@@ -2417,7 +2423,7 @@ function renderVehiculos(){
           <div class="proy-card-footer">
             <span class="proy-card-cat">${v.uuid===DB.config.vehiculoActivo?'✅ Activo':''}</span>
             <div>
-              <button class="btn btn-sm" onclick="event.stopPropagation();modalEditarVehiculo('${v.uuid}')">✎</button>
+              <button class="btn btn-sm btn-e" onclick="event.stopPropagation();modalEditarVehiculo('${v.uuid}')">✎</button>
               <button class="btn btn-sm btn-d" onclick="event.stopPropagation();eliminarVehiculo('${v.uuid}')">✕</button>
             </div>
           </div>
