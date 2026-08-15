@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.61-dev';
+const VERSION = 'v0.62-dev';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -379,14 +379,15 @@ async function cvSincronizarDrive(silencioso){
   }
 }
 
-// ── SYNC RESTRINGIDO PARA CELULAR (solo cargas de combustible) ─────────────
-// El celular NUNCA debe mergear ni subir vehículos, mantenimientos,
-// componentes, gastos ni alertas: si el teléfono tiene una copia vieja o
-// parcial de esas colecciones (por ejemplo porque hace tiempo no abre la
-// app completa), no debe poder pisarlas ni "resucitar" datos viejos en
-// Drive. El celular es de solo lectura para todo lo que no sea `cargas`;
-// para `cargas` sí aporta lo nuevo, mergeado por uuid/lastModified.
-const COLECCIONES_SOLO_PC = ['vehiculos','mantenimientosProgramados','mantenimientosRealizados','novedades','componentes','gastosFijos','gastosVariables','alertas'];
+// ── SYNC RESTRINGIDO PARA CELULAR (solo cargas de combustible y novedades) ──
+// El celular NUNCA debe mergear ni subir vehículos, mantenimientos programados
+// o realizados, componentes, gastos ni alertas: si el teléfono tiene una copia
+// vieja o parcial de esas colecciones (por ejemplo porque hace tiempo no abre
+// la app completa), no debe poder pisarlas ni "resucitar" datos viejos en
+// Drive. El celular es de solo lectura para todo lo que no sea `cargas` o
+// `novedades` (altas nuevas); para esas dos sí aporta lo nuevo, mergeado por
+// uuid/lastModified. Resolver/editar/eliminar una novedad sigue siendo PC-only.
+const COLECCIONES_SOLO_PC = ['vehiculos','mantenimientosProgramados','mantenimientosRealizados','componentes','gastosFijos','gastosVariables','alertas'];
 
 async function cvSubirDriveMobil(){
   if(typeof DriveSync === 'undefined' || !DriveSync.conectado) return;
@@ -394,15 +395,22 @@ async function cvSubirDriveMobil(){
     const remoto = await DriveSync.bajarBackup();
     if(remoto && typeof remoto === 'object' && Object.keys(remoto).length){
       const cargasMergeadas = cvMergeColeccion(DB.cargas, remoto.cargas);
-      // Se sube una copia de lo remoto con SOLO `cargas` actualizado; todo
-      // lo demás viaja tal cual estaba en Drive, nunca la versión local del celu.
-      const dbParaSubir = Object.assign({}, remoto, { cargas: cargasMergeadas });
+      // `novedades` se mergea igual que `cargas`: el cel puede CREAR novedades
+      // pendientes sin perderlas. Resolver/editar/eliminar sigue restringido
+      // a PC (ver guardas esMobile() en esos modales), así que del cel solo
+      // pueden llegar altas nuevas, nunca cambios sobre novedades existentes.
+      const novedadesMergeadas = cvMergeColeccion(DB.novedades, remoto.novedades);
+      // Se sube una copia de lo remoto con `cargas`/`novedades` actualizados;
+      // todo lo demás viaja tal cual estaba en Drive, nunca la versión local del celu.
+      const dbParaSubir = Object.assign({}, remoto, { cargas: cargasMergeadas, novedades: novedadesMergeadas });
       if(DB.nid > (remoto.nid||0)) dbParaSubir.nid = DB.nid;
       await DriveSync.subirBackup(dbParaSubir);
       // Reflejar localmente lo que había en Drive (vehículos, config, etc.)
-      // para que el selector/sugerencias del celu estén al día — solo lectura.
+      // para que el selector/sugerencias del celu estén al día — solo lectura,
+      // salvo cargas y novedades que sí se mergean.
       COLECCIONES_SOLO_PC.forEach(k => { DB[k] = remoto[k] || DB[k]; });
       DB.cargas = cargasMergeadas;
+      DB.novedades = novedadesMergeadas;
       if(remoto.nid && remoto.nid > DB.nid) DB.nid = remoto.nid;
       normalizarDB();
       localStorage.setItem(SKEY, JSON.stringify(DB));
@@ -862,7 +870,7 @@ function editarNovedad(uuid, datos){
   tocar(n); save();
 }
 function eliminarNovedad(uuid){
-  if(esMobile()){ alert('⚠️ Los mantenimientos y novedades se cargan desde la PC. En el celular los cambios no se preservan (Drive los sincroniza como solo lectura), para evitar perder el historial si el cel tiene datos viejos.'); return; }
+  if(esMobile()){ alert('⚠️ Resolver, editar o eliminar novedades se hace desde la PC. Desde el cel podés cargar novedades nuevas, pero no modificar las existentes.'); return; }
   if(!confirm('¿Eliminar esta novedad? Si ya fue resuelta, también se borra el registro de mantenimiento asociado.')) return;
   const n = DB.novedades.find(x=>x.uuid===uuid);
   if(n && n.mantenimientoRealizadoId){
@@ -1840,7 +1848,6 @@ function guardarMantenimientoADemanda(){
 }
 
 function modalNuevaNovedad(){
-  if(esMobile()){ alert('⚠️ Los mantenimientos y novedades se cargan desde la PC. En el celular los cambios no se preservan (Drive los sincroniza como solo lectura), para evitar perder el historial si el cel tiene datos viejos.'); return; }
   const v = vehiculoActivo();
   const kmSugerido = kmActualVehiculo(v.uuid);
   abrirModal('⚠️ Nueva novedad', `
@@ -1873,11 +1880,18 @@ function guardarNuevaNovedad(){
   if(!descripcion){ alert('Describí la novedad.'); return; }
   if(!km_ocurrencia){ alert('Ingresá el kilometraje.'); return; }
   crearNovedad({ vehiculoId: v.uuid, descripcion, km_ocurrencia, fecha_ocurrencia, gravedad });
-  cerrarModal(); goTo('mantenimientos');
+  cerrarModal();
+  const slot = document.getElementById('vr-confirm-slot');
+  if(slot){
+    // Estamos en la vista rápida del cel: confirmación inline, sin entrar a la app completa.
+    slot.innerHTML = `<div class="vr-confirm">✅ Novedad guardada. La vas a ver en Mantenimientos cuando entres desde la PC.</div>`;
+  } else {
+    goTo('mantenimientos');
+  }
 }
 
 function modalEditarNovedad(uuid){
-  if(esMobile()){ alert('⚠️ Los mantenimientos y novedades se cargan desde la PC. En el celular los cambios no se preservan (Drive los sincroniza como solo lectura), para evitar perder el historial si el cel tiene datos viejos.'); return; }
+  if(esMobile()){ alert('⚠️ Resolver, editar o eliminar novedades se hace desde la PC. Desde el cel podés cargar novedades nuevas, pero no modificar las existentes.'); return; }
   const n = DB.novedades.find(x=>x.uuid===uuid);
   if(!n) return;
   abrirModal('✎ Editar novedad', `
@@ -1912,7 +1926,7 @@ function guardarEdicionNovedad(uuid){
 }
 
 function modalResolverNovedad(uuid){
-  if(esMobile()){ alert('⚠️ Los mantenimientos y novedades se cargan desde la PC. En el celular los cambios no se preservan (Drive los sincroniza como solo lectura), para evitar perder el historial si el cel tiene datos viejos.'); return; }
+  if(esMobile()){ alert('⚠️ Resolver, editar o eliminar novedades se hace desde la PC. Desde el cel podés cargar novedades nuevas, pero no modificar las existentes.'); return; }
   const n = DB.novedades.find(x=>x.uuid===uuid);
   if(!n) return;
   const v = vehiculoActivo();
@@ -2832,6 +2846,7 @@ function renderVistaRapidaMobile(){
       <div class="vr-gps" id="vr-gps-status">📍 Obteniendo ubicación…</div>
 
       <button class="vr-btn-main" onclick="guardarCargaRapidaMobile()">Guardar carga</button>
+      <button class="vr-btn-main" style="background:transparent;border:1px solid #d29922;color:#d29922;margin-top:8px" onclick="modalNuevaNovedad()">⚠️ Reportar novedad</button>
       <div class="vr-full-link">
         <a onclick="abrirAppCompletaDesdeMobile()" style="color:var(--primary-light);cursor:pointer">Ver app completa</a>
         &nbsp;·&nbsp;
