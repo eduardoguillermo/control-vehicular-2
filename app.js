@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.60-dev';
+const VERSION = 'v0.61-dev';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -759,6 +759,7 @@ function editarMantenimientoProgramado(uuid, datos){
   tocar(m); save();
 }
 function eliminarMantenimientoProgramado(uuid){
+  if(esMobile()){ alert('⚠️ Los mantenimientos y novedades se cargan desde la PC. En el celular los cambios no se preservan (Drive los sincroniza como solo lectura), para evitar perder el historial si el cel tiene datos viejos.'); return; }
   if(!confirm('¿Eliminar este mantenimiento programado y su historial de realizaciones?')) return;
   DB.mantenimientosProgramados = DB.mantenimientosProgramados.filter(m=>m.uuid!==uuid);
   DB.mantenimientosRealizados = DB.mantenimientosRealizados.filter(m=>m.mantenimientoProgramadoId!==uuid);
@@ -802,6 +803,7 @@ function registrarMantenimientoRealizado(datos){
   return r;
 }
 function eliminarMantenimientoRealizado(uuid){
+  if(esMobile()){ alert('⚠️ Los mantenimientos y novedades se cargan desde la PC. En el celular los cambios no se preservan (Drive los sincroniza como solo lectura), para evitar perder el historial si el cel tiene datos viejos.'); return; }
   if(!confirm('¿Eliminar este registro de mantenimiento realizado?')) return;
   const r = DB.mantenimientosRealizados.find(m=>m.uuid===uuid);
   // Si este registro vino de resolver una novedad, la novedad vuelve a quedar pendiente
@@ -860,6 +862,7 @@ function editarNovedad(uuid, datos){
   tocar(n); save();
 }
 function eliminarNovedad(uuid){
+  if(esMobile()){ alert('⚠️ Los mantenimientos y novedades se cargan desde la PC. En el celular los cambios no se preservan (Drive los sincroniza como solo lectura), para evitar perder el historial si el cel tiene datos viejos.'); return; }
   if(!confirm('¿Eliminar esta novedad? Si ya fue resuelta, también se borra el registro de mantenimiento asociado.')) return;
   const n = DB.novedades.find(x=>x.uuid===uuid);
   if(n && n.mantenimientoRealizadoId){
@@ -1731,6 +1734,7 @@ function renderHistorialMantenimientos(vehiculoId){
 }
 
 function modalNuevoMantenimientoProgramado(){
+  if(esMobile()){ alert('⚠️ Los mantenimientos y novedades se cargan desde la PC. En el celular los cambios no se preservan (Drive los sincroniza como solo lectura), para evitar perder el historial si el cel tiene datos viejos.'); return; }
   abrirModal('🔧 Programar servicio', `
     <div class="fg"><label>Nombre del servicio</label><input type="text" id="f-nombre" placeholder="Ej: Cambio de aceite"></div>
     <div class="fg"><label>Intervalo (cada cuántos km)</label><input type="number" inputmode="numeric" id="f-intervalo" placeholder="Ej: 10000"></div>
@@ -1750,6 +1754,7 @@ function guardarNuevoMantenimientoProgramado(){
   cerrarModal(); goTo('mantenimientos');
 }
 function modalEditarMantenimientoProgramado(uuid){
+  if(esMobile()){ alert('⚠️ Los mantenimientos y novedades se cargan desde la PC. En el celular los cambios no se preservan (Drive los sincroniza como solo lectura), para evitar perder el historial si el cel tiene datos viejos.'); return; }
   const p = DB.mantenimientosProgramados.find(x=>x.uuid===uuid);
   if(!p) return;
   abrirModal('✎ Editar servicio', `
@@ -1762,6 +1767,7 @@ function modalEditarMantenimientoProgramado(uuid){
   `);
 }
 function modalRegistrarMantenimiento(mantenimientoProgramadoId){
+  if(esMobile()){ alert('⚠️ Los mantenimientos y novedades se cargan desde la PC. En el celular los cambios no se preservan (Drive los sincroniza como solo lectura), para evitar perder el historial si el cel tiene datos viejos.'); return; }
   const v = vehiculoActivo();
   const prog = DB.mantenimientosProgramados.find(p=>p.uuid===mantenimientoProgramadoId);
   const kmSugerido = kmActualVehiculo(v.uuid);
@@ -1795,6 +1801,7 @@ function guardarMantenimientoRealizado(mantenimientoProgramadoId){
 // No genera un mantenimientoProgramado ni alertas futuras, solo queda en el
 // historial y suma al costo por km igual que cualquier otro mantenimiento.
 function modalMantenimientoADemanda(){
+  if(esMobile()){ alert('⚠️ Los mantenimientos y novedades se cargan desde la PC. En el celular los cambios no se preservan (Drive los sincroniza como solo lectura), para evitar perder el historial si el cel tiene datos viejos.'); return; }
   const v = vehiculoActivo();
   const kmSugerido = kmActualVehiculo(v.uuid);
   abrirModal('🔧 Mantenimiento a demanda', `
@@ -1833,6 +1840,7 @@ function guardarMantenimientoADemanda(){
 }
 
 function modalNuevaNovedad(){
+  if(esMobile()){ alert('⚠️ Los mantenimientos y novedades se cargan desde la PC. En el celular los cambios no se preservan (Drive los sincroniza como solo lectura), para evitar perder el historial si el cel tiene datos viejos.'); return; }
   const v = vehiculoActivo();
   const kmSugerido = kmActualVehiculo(v.uuid);
   abrirModal('⚠️ Nueva novedad', `
@@ -1869,6 +1877,7 @@ function guardarNuevaNovedad(){
 }
 
 function modalEditarNovedad(uuid){
+  if(esMobile()){ alert('⚠️ Los mantenimientos y novedades se cargan desde la PC. En el celular los cambios no se preservan (Drive los sincroniza como solo lectura), para evitar perder el historial si el cel tiene datos viejos.'); return; }
   const n = DB.novedades.find(x=>x.uuid===uuid);
   if(!n) return;
   abrirModal('✎ Editar novedad', `
@@ -1903,6 +1912,7 @@ function guardarEdicionNovedad(uuid){
 }
 
 function modalResolverNovedad(uuid){
+  if(esMobile()){ alert('⚠️ Los mantenimientos y novedades se cargan desde la PC. En el celular los cambios no se preservan (Drive los sincroniza como solo lectura), para evitar perder el historial si el cel tiene datos viejos.'); return; }
   const n = DB.novedades.find(x=>x.uuid===uuid);
   if(!n) return;
   const v = vehiculoActivo();
