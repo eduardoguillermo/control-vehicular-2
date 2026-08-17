@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.69-dev';
+const VERSION = 'v0.70-dev';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -1386,7 +1386,7 @@ function actualizarSelectorVehiculo(){
   if(!DB.vehiculos.length){ wrap.style.display='none'; return; }
   wrap.style.display = 'flex';
   sel.innerHTML = DB.vehiculos.map(v =>
-    `<option value="${v.uuid}" ${v.uuid===DB.config.vehiculoActivo?'selected':''}>${escHtml(v.nombre)}</option>`
+    `<option value="${v.uuid}" ${v.uuid===DB.config.vehiculoActivo?'selected':''}>${escHtml(v.nombre)}${v.propietario?' — '+escHtml(v.propietario):''}</option>`
   ).join('');
 }
 
@@ -2519,7 +2519,7 @@ function renderVehiculos(){
 function modalNuevoVehiculo(){
   abrirModal('🚙 Nuevo vehículo', `
     <div class="fg"><label>Matrícula</label><input type="text" id="f-nombre" placeholder="Ej: AB123CD" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"></div>
-    <div class="fg"><label>Propietario</label><input type="text" id="f-propietario" placeholder="Nombre del dueño"></div>
+    <div class="fg"><label>Propietario</label><input type="text" id="f-propietario" placeholder="Nombre y apellido"></div>
     <div class="fgrid">
       <div class="fg"><label>Tipo</label><select id="f-tipo"><option>Auto</option><option>Moto</option></select></div>
       <div class="fg"><label>Año</label><input type="number" inputmode="numeric" id="f-anio"></div>
@@ -2551,7 +2551,7 @@ function modalEditarVehiculo(uuid){
   const v = DB.vehiculos.find(x=>x.uuid===uuid);
   abrirModal('✎ Editar vehículo', `
     <div class="fg"><label>Matrícula</label><input type="text" id="f-nombre" value="${escHtml(v.nombre)}" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"></div>
-    <div class="fg"><label>Propietario</label><input type="text" id="f-propietario" value="${escHtml(v.propietario||'')}" placeholder="Nombre del dueño"></div>
+    <div class="fg"><label>Propietario</label><input type="text" id="f-propietario" value="${escHtml(v.propietario||'')}" placeholder="Nombre y apellido"></div>
     <div class="fgrid">
       <div class="fg"><label>Tipo</label><select id="f-tipo"><option ${v.tipo==='Auto'?'selected':''}>Auto</option><option ${v.tipo==='Moto'?'selected':''}>Moto</option></select></div>
       <div class="fg"><label>Año</label><input type="number" inputmode="numeric" id="f-anio" value="${v.anio||''}"></div>
