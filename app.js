@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.72-dev';
+const VERSION = 'v0.73-dev';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -1580,7 +1580,7 @@ function renderCombustible(){
       <div class="stat"><div class="stat-n">${cargas.length}</div><div class="stat-l">Cargas registradas</div></div>
     </div>
     <div class="card"><div class="card-body twrap">
-      ${cargas.length ? `<table><thead><tr><th>Fecha</th><th>Km</th><th>Marca</th><th>Tipo</th><th>Litros</th><th>$/L</th><th>Total</th><th>Lleno</th><th>Rendim.</th><th>📍</th><th></th></tr></thead><tbody>
+      ${cargas.length ? `<table><thead><tr><th>Fecha</th><th>Km</th><th>Marca</th><th>Tipo</th><th>Litros</th><th>$/L</th><th>Total</th><th>Lleno</th><th>Rendim.</th><th>📍 Estación</th><th></th></tr></thead><tbody>
       ${cargas.map(c=>`<tr>
         <td class="mono">${fmtFecha(c.fecha)}</td>
         <td>${fmtKm(c.km)}</td>
@@ -1591,7 +1591,7 @@ function renderCombustible(){
         <td>${fmtMoney(c.totalPagado)}</td>
         <td>${c.tanqueLleno?'✅':'—'}</td>
         <td>${fmtRendimiento(c.rendimiento_calculado)}</td>
-        <td>${c.ubicacion ? `<a href="https://www.google.com/maps?q=${c.ubicacion.lat},${c.ubicacion.lng}" target="_blank" rel="noopener" title="${c.ubicacion.direccion ? escHtml(c.ubicacion.direccion) : 'Ver ubicación en el mapa'}">📍</a>` : '—'}</td>
+        <td>${c.ubicacion ? `<a href="https://www.google.com/maps?q=${c.ubicacion.lat},${c.ubicacion.lng}" target="_blank" rel="noopener" class="text2" style="display:inline-block;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle" title="${escHtml(c.ubicacion.direccion||'Ver ubicación en el mapa')}">📍 ${c.ubicacion.direccion ? escHtml(c.ubicacion.direccion) : 'Ver mapa'}</a>` : '—'}</td>
         <td style="white-space:nowrap">
           <button class="btn btn-sm btn-e" onclick="modalEditarCarga('${c.uuid}')">✎</button>
           <button class="btn btn-sm btn-d" onclick="eliminarCarga('${c.uuid}')">✕</button>
