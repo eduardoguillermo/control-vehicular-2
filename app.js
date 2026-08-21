@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.71-dev';
+const VERSION = 'v0.72-dev';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -3056,15 +3056,23 @@ function cvReverseGeocodeMobile(ubic){
 // (o null si no hay ninguna cargada en OSM cerca, o si falla la consulta).
 // Gratuito, sin API key. Se usa tanto al capturar una carga nueva como en el
 // backfill manual de cargas ya guardadas (ver cvBackfillEstacionesCargas).
+//
+// Las estaciones se mapean en OSM tanto como nodo puntual como polígono
+// (way) — sobre todo las más grandes, con marquesina/canopia, que suelen
+// ser la mayoría en zona urbana. Por eso se buscan node + way; los way no
+// traen lat/lon directo, se pide "out center" para obtener el centro.
 function cvBuscarEstacionCercana(lat, lng){
   const ctrl = new AbortController();
   const timeoutId = setTimeout(()=>ctrl.abort(), 8000);
-  const query = `[out:json][timeout:8];node(around:100,${lat},${lng})[amenity=fuel];out body;`;
+  const query = `[out:json][timeout:8];(node(around:100,${lat},${lng})[amenity=fuel];way(around:100,${lat},${lng})[amenity=fuel];);out center;`;
   const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(query);
   return fetch(url, { signal: ctrl.signal })
     .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP '+r.status)))
     .then(data => {
-      const nodos = (data.elements || []).filter(e => e.tags);
+      const nodos = (data.elements || [])
+        .filter(e => e.tags)
+        .map(e => ({ tags: e.tags, lat: e.lat ?? (e.center && e.center.lat), lon: e.lon ?? (e.center && e.center.lon) }))
+        .filter(e => typeof e.lat === 'number' && typeof e.lon === 'number');
       if(!nodos.length) return null;
       const distancia = (la1, lo1, la2, lo2) => {
         const R = 6371000, rad = Math.PI/180;
