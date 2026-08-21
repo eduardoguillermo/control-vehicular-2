@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.70-dev';
+const VERSION = 'v0.71-dev';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -2588,6 +2588,14 @@ function renderAjustes(){
         <button class="btn" style="margin-top:12px" onclick="restaurarAjustesAlertasDefault()">↺ Restaurar valores de fábrica (500km / 80%)</button>
       </div>
     </div>
+    <div class="card">
+      <div class="ch"><div class="ct">📍 Corregir estaciones en cargas guardadas</div></div>
+      <div class="card-body">
+        <p class="text2" style="margin-bottom:14px;font-size:12px">Vuelve a buscar la estación de servicio (OpenStreetMap) para las cargas que ya tienen ubicación guardada, por si en su momento no se había podido identificar el nombre (por ejemplo, por quedar unos metros afuera de la estación). Solo corrige las que encuentra; el resto queda igual. Consulta de a una carga por vez para no saturar el servicio gratuito — puede tardar según cuántas tengas.</p>
+        <button class="btn btn-p" id="btn-backfill-estaciones" onclick="cvBackfillEstacionesCargas()">🔄 Corregir estaciones ahora</button>
+        <div id="backfill-estaciones-status" class="text2" style="margin-top:10px;font-size:12px"></div>
+      </div>
+    </div>
   `;
 }
 
@@ -2992,40 +3000,120 @@ function cvCapturarUbicacionMobile(){
 // Convierte lat/lng en un nombre de lugar/dirección legible (ej. "YPF, Ruta
 // 9, Maldonado"). Si falla (sin internet, timeout, servicio caído) la carga
 // igual se guarda con lat/lng, solo que sin el texto de dirección.
+//
+// Nominatim solo devuelve el nombre del POI si el punto GPS cae *dentro* del
+// polígono/nodo de la estación en OSM; si la carga se registra unos metros
+// afuera (común en estaciones grandes, con varias islas), Nominatim devuelve
+// la calle o un comercio vecino en vez de la estación. Por eso, en paralelo,
+// se consulta Overpass API buscando específicamente estaciones de servicio
+// (amenity=fuel) en un radio de 100m — si aparece alguna, su nombre tiene
+// prioridad sobre lo que diga Nominatim.
 function cvReverseGeocodeMobile(ubic){
   const ctrl = new AbortController();
   const timeoutId = setTimeout(()=>ctrl.abort(), 8000);
   const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${ubic.lat}&lon=${ubic.lng}&zoom=18&addressdetails=1`;
-  fetch(url, { headers: { 'Accept-Language': 'es' }, signal: ctrl.signal })
+
+  const pNominatim = fetch(url, { headers: { 'Accept-Language': 'es' }, signal: ctrl.signal })
     .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP '+r.status)))
     .then(data => {
-      clearTimeout(timeoutId);
       const a = data.address || {};
-      // Prioridad: nombre del POI (estación de servicio, si Nominatim lo
-      // identifica) > nombre de la vía > la dirección visible completa.
       const nombreLugar = data.name || a.fuel || a.amenity || a.shop || null;
       const calle = a.road || a.pedestrian || '';
       const localidad = a.city || a.town || a.village || a.suburb || '';
-      let direccion = nombreLugar ? nombreLugar : (calle || data.display_name || '');
-      if(localidad && !direccion.includes(localidad)) direccion += (direccion ? ', ' : '') + localidad;
-      if(!direccion) direccion = data.display_name || '';
-
-      // Solo aplica si sigue siendo la misma ubicación vigente (el usuario
-      // no cerró/reinició el formulario mientras esperábamos la respuesta).
-      if(_vrUbicacionActual && _vrUbicacionActual.lat === ubic.lat && _vrUbicacionActual.lng === ubic.lng){
-        _vrUbicacionActual.direccion = direccion;
-        const elNow = document.getElementById('vr-gps-status');
-        if(elNow) elNow.textContent = direccion ? `📍 ${direccion}` : '📍 Ubicación capturada';
-      }
+      return { nombreLugar, calle, localidad, display_name: data.display_name || '' };
     })
-    .catch(() => {
-      clearTimeout(timeoutId);
-      // Sin dirección legible, pero lat/lng ya está guardado en _vrUbicacionActual.
-      if(_vrUbicacionActual && _vrUbicacionActual.lat === ubic.lat && _vrUbicacionActual.lng === ubic.lng){
-        const elNow = document.getElementById('vr-gps-status');
-        if(elNow) elNow.textContent = '📍 Ubicación capturada (sin nombre de lugar)';
+    .catch(() => null)
+    .finally(() => clearTimeout(timeoutId));
+
+  const pEstacion = cvBuscarEstacionCercana(ubic.lat, ubic.lng);
+
+  Promise.all([pNominatim, pEstacion]).then(([nom, estacion]) => {
+    // Solo aplica si sigue siendo la misma ubicación vigente (el usuario
+    // no cerró/reinició el formulario mientras esperábamos la respuesta).
+    if(!(_vrUbicacionActual && _vrUbicacionActual.lat === ubic.lat && _vrUbicacionActual.lng === ubic.lng)) return;
+
+    let direccion = '';
+    if(estacion){
+      // Estación de servicio encontrada cerca por Overpass — prioridad
+      // máxima, es más confiable que el snap por punto de Nominatim.
+      direccion = estacion;
+      const localidad = nom && nom.localidad;
+      if(localidad && !direccion.includes(localidad)) direccion += ', ' + localidad;
+    } else if(nom){
+      direccion = nom.nombreLugar ? nom.nombreLugar : (nom.calle || nom.display_name || '');
+      if(nom.localidad && !direccion.includes(nom.localidad)) direccion += (direccion ? ', ' : '') + nom.localidad;
+      if(!direccion) direccion = nom.display_name || '';
+    }
+
+    _vrUbicacionActual.direccion = direccion;
+    const elNow = document.getElementById('vr-gps-status');
+    if(elNow) elNow.textContent = direccion ? `📍 ${direccion}` : '📍 Ubicación capturada (sin nombre de lugar)';
+  });
+}
+
+// Busca estaciones de servicio (amenity=fuel) en OpenStreetMap dentro de un
+// radio de 100m usando Overpass API, y devuelve el nombre de la más cercana
+// (o null si no hay ninguna cargada en OSM cerca, o si falla la consulta).
+// Gratuito, sin API key. Se usa tanto al capturar una carga nueva como en el
+// backfill manual de cargas ya guardadas (ver cvBackfillEstacionesCargas).
+function cvBuscarEstacionCercana(lat, lng){
+  const ctrl = new AbortController();
+  const timeoutId = setTimeout(()=>ctrl.abort(), 8000);
+  const query = `[out:json][timeout:8];node(around:100,${lat},${lng})[amenity=fuel];out body;`;
+  const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(query);
+  return fetch(url, { signal: ctrl.signal })
+    .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP '+r.status)))
+    .then(data => {
+      const nodos = (data.elements || []).filter(e => e.tags);
+      if(!nodos.length) return null;
+      const distancia = (la1, lo1, la2, lo2) => {
+        const R = 6371000, rad = Math.PI/180;
+        const dLat = (la2-la1)*rad, dLon = (lo2-lo1)*rad;
+        const s = Math.sin(dLat/2)**2 + Math.cos(la1*rad)*Math.cos(la2*rad)*Math.sin(dLon/2)**2;
+        return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1-s));
+      };
+      let mejor = null, mejorDist = Infinity;
+      for(const n of nodos){
+        const d = distancia(lat, lng, n.lat, n.lon);
+        if(d < mejorDist){ mejorDist = d; mejor = n; }
       }
-    });
+      return mejor ? (mejor.tags.brand || mejor.tags.name || mejor.tags.operator || null) : null;
+    })
+    .catch(() => null)
+    .finally(() => clearTimeout(timeoutId));
+}
+
+// Backfill manual: vuelve a consultar Overpass para las cargas que ya tienen
+// lat/lng guardado, por si en su momento (GPS unos metros afuera de la
+// estación) no se había podido identificar el nombre. Se corre bajo demanda
+// desde ⚙️ Ajustes — no automático, para no disparar decenas de consultas a
+// un servicio gratuito sin que el usuario lo pida. Solo pisa el nombre
+// guardado si Overpass encuentra una estación cerca; si no encuentra nada,
+// la carga queda tal cual estaba (no borra lo que ya tenía).
+async function cvBackfillEstacionesCargas(){
+  const candidatas = DB.cargas.filter(c => !c._deleted && c.ubicacion && typeof c.ubicacion.lat === 'number' && typeof c.ubicacion.lng === 'number');
+  const btn = document.getElementById('btn-backfill-estaciones');
+  const estado = document.getElementById('backfill-estaciones-status');
+  if(!candidatas.length){ if(estado) estado.textContent = 'No hay cargas con ubicación guardada.'; return; }
+  if(btn) btn.disabled = true;
+  let corregidas = 0, revisadas = 0;
+  for(const c of candidatas){
+    revisadas++;
+    if(estado) estado.textContent = `Revisando ${revisadas}/${candidatas.length}…`;
+    try{
+      const estacion = await cvBuscarEstacionCercana(c.ubicacion.lat, c.ubicacion.lng);
+      if(estacion && estacion !== c.ubicacion.direccion){
+        c.ubicacion.direccion = estacion;
+        tocar(c);
+        corregidas++;
+      }
+    }catch(e){ /* se ignora esta carga puntual y se sigue con la siguiente */ }
+    // Pausa entre consultas para no saturar Overpass (servicio gratuito, sin key).
+    await new Promise(r => setTimeout(r, 1100));
+  }
+  if(btn) btn.disabled = false;
+  if(estado) estado.textContent = `✅ Listo: ${corregidas} de ${candidatas.length} cargas corregidas con nombre de estación.`;
+  if(corregidas) save();
 }
 
 function guardarCargaRapidaMobile(){
