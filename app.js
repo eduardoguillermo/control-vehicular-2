@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.73-dev';
+const VERSION = 'v0.74-dev';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -692,6 +692,15 @@ function editarCarga(uuid, datos){
     marca: datos.marca || '',
     fecha: datos.fecha || c.fecha
   });
+  // Corrección manual de la ubicación (nombre y/o coordenadas), ej. si la
+  // búsqueda automática por GPS se equivocó o quedó desactualizada. Solo
+  // aplica si la carga ya tiene ubicación guardada — no agrega una nueva
+  // desde acá, solo corrige la que ya existe.
+  if(c.ubicacion){
+    if(typeof datos.direccionUbicacion === 'string') c.ubicacion.direccion = datos.direccionUbicacion;
+    if(typeof datos.latUbicacion === 'number' && !isNaN(datos.latUbicacion)) c.ubicacion.lat = datos.latUbicacion;
+    if(typeof datos.lngUbicacion === 'number' && !isNaN(datos.lngUbicacion)) c.ubicacion.lng = datos.lngUbicacion;
+  }
   tocar(c);
   recalcularRendimientosVehiculo(c.vehiculoId);
   save();
@@ -1710,12 +1719,79 @@ function modalEditarCarga(uuid){
       <input type="checkbox" id="f-lleno" ${c.tanqueLleno?'checked':''} style="width:18px;height:18px;accent-color:var(--primary)">
       <label style="text-transform:none;font-size:13px">⛽ ¿Tanque lleno?</label>
     </div>
+    ${c.ubicacion ? `
+    <div class="fg" style="margin-top:6px">
+      <label>📍 Estación / lugar</label>
+      <input type="text" id="f-estacion" value="${escHtml(c.ubicacion.direccion||'')}" placeholder="Nombre de la estación">
+    </div>
+    <div class="fgrid">
+      <div class="fg"><label>Latitud</label><input type="number" inputmode="decimal" step="0.000001" id="f-lat" value="${c.ubicacion.lat}"></div>
+      <div class="fg"><label>Longitud</label><input type="number" inputmode="decimal" step="0.000001" id="f-lng" value="${c.ubicacion.lng}"></div>
+    </div>
+    <div class="fg" style="flex-direction:row;gap:8px;flex-wrap:wrap;margin-top:2px">
+      <button type="button" class="btn btn-sm" onclick="cvUsarUbicacionActualEdicion()">📍 Usar mi ubicación actual</button>
+      <button type="button" class="btn btn-sm" onclick="cvRebuscarEstacionEdicion()">🔎 Buscar estación con estas coordenadas</button>
+    </div>
+    <div class="text3" style="font-size:11px;margin-top:6px" id="f-ubic-map-link"><a href="https://www.google.com/maps?q=${c.ubicacion.lat},${c.ubicacion.lng}" target="_blank" rel="noopener">Ver ubicación en el mapa ↗</a></div>
+    <div class="text3" style="font-size:11px;margin-top:2px" id="f-ubic-status"></div>
+    ` : ''}
     <div class="note" style="margin-top:10px;font-size:11px">Al guardar se recalcula el rendimiento de esta carga y de las posteriores.</div>
   `, `
     <button class="btn" onclick="cerrarModal()">Cancelar</button>
     <button class="btn btn-p" onclick="guardarEdicionCarga('${uuid}')">Guardar</button>
   `);
 }
+
+// Toma la posición GPS actual del dispositivo y la vuelca en los campos de
+// lat/lng del modal de edición — útil cuando estás parado en la estación
+// correcta y querés corregir una carga cuya ubicación quedó mal registrada.
+function cvUsarUbicacionActualEdicion(){
+  const st = document.getElementById('f-ubic-status');
+  if(!navigator.geolocation){ if(st) st.textContent = '📍 GPS no disponible en este navegador.'; return; }
+  if(st) st.textContent = '📍 Obteniendo ubicación actual…';
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const lat = pos.coords.latitude, lng = pos.coords.longitude;
+      const elLat = document.getElementById('f-lat');
+      const elLng = document.getElementById('f-lng');
+      if(elLat) elLat.value = lat;
+      if(elLng) elLng.value = lng;
+      cvActualizarLinkMapaEdicion(lat, lng);
+      if(st) st.textContent = '📍 Ubicación actual cargada. Tocá "Buscar estación" para actualizar el nombre.';
+    },
+    err => { if(st) st.textContent = err.code === err.PERMISSION_DENIED ? '📍 Sin permiso de ubicación.' : '📍 No se pudo obtener la ubicación.'; },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+  );
+}
+
+function cvActualizarLinkMapaEdicion(lat, lng){
+  const el = document.getElementById('f-ubic-map-link');
+  if(el) el.innerHTML = `<a href="https://www.google.com/maps?q=${lat},${lng}" target="_blank" rel="noopener">Ver ubicación en el mapa ↗</a>`;
+}
+
+// Vuelve a correr la búsqueda de estación (Overpass) con las coordenadas que
+// haya en los campos lat/lng del modal en ese momento — ya sea porque se
+// tipearon a mano o porque se cargaron con "Usar mi ubicación actual".
+function cvRebuscarEstacionEdicion(){
+  const elLat = document.getElementById('f-lat');
+  const elLng = document.getElementById('f-lng');
+  const st = document.getElementById('f-ubic-status');
+  if(!elLat || !elLng) return;
+  const lat = Number(elLat.value), lng = Number(elLng.value);
+  if(!lat || !lng){ if(st) st.textContent = 'Coordenadas inválidas.'; return; }
+  cvActualizarLinkMapaEdicion(lat, lng);
+  if(st) st.textContent = '🔎 Buscando estación…';
+  cvBuscarEstacionCercana(lat, lng).then(estacion => {
+    const elEstacion = document.getElementById('f-estacion');
+    if(estacion){
+      if(elEstacion) elEstacion.value = estacion;
+      if(st) st.textContent = `✅ Encontrada: ${estacion}`;
+    } else if(st) {
+      st.textContent = 'No se encontró ninguna estación cerca — completá el nombre a mano.';
+    }
+  });
+}
+
 function guardarEdicionCarga(uuid){
   const km = Number(document.getElementById('f-km').value);
   const fecha = new Date(document.getElementById('f-fecha').value).toISOString();
@@ -1726,9 +1802,15 @@ function guardarEdicionCarga(uuid){
   const totalPagado = Number(document.getElementById('f-total').value);
   recordarMarcaCombustibleCustom(marca);
   const tanqueLleno = document.getElementById('f-lleno').checked;
+  const elEstacion = document.getElementById('f-estacion');
+  const direccionUbicacion = elEstacion ? elEstacion.value.trim() : undefined;
+  const elLat = document.getElementById('f-lat');
+  const elLng = document.getElementById('f-lng');
+  const latUbicacion = elLat && elLat.value !== '' ? Number(elLat.value) : undefined;
+  const lngUbicacion = elLng && elLng.value !== '' ? Number(elLng.value) : undefined;
   if(!km || !litros || !totalPagado){ alert('Completá km, litros y total.'); return; }
   cerrarModal();
-  const resultado = editarCarga(uuid, { km, fecha, marca, tipoCombustible, litros, costoLitro, totalPagado, tanqueLleno });
+  const resultado = editarCarga(uuid, { km, fecha, marca, tipoCombustible, litros, costoLitro, totalPagado, tanqueLleno, direccionUbicacion, latUbicacion, lngUbicacion });
   goTo('combustible');
   if(resultado && resultado.alertas.length){
     setTimeout(()=>alert(resultado.alertas.map(a=>a.mensaje).join('\n\n')), 100);
