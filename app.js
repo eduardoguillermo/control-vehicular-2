@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v1.04-dev';
+const VERSION = 'v1.05-dev';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -3031,6 +3031,39 @@ function datosGraficoLecturasKm(vehiculoId){
   return puntos;
 }
 
+// Gráfico de LÍNEAS (no barras) con los km recorridos por mes — un SVG
+// simple armado a mano (sin librerías externas), con un punto por mes
+// conectado al siguiente. Las etiquetas de mes van posicionadas con las
+// mismas coordenadas X que los puntos del SVG, para que queden alineadas
+// exactas debajo de cada uno.
+function renderGraficoLineaLecturasKm(puntos){
+  if(!puntos.length) return '';
+  const H = 120, padY = 14, padX = 22;
+  const W = Math.max(puntos.length * 64, puntos.length > 1 ? 200 : 140);
+  const maxKm = Math.max(...puntos.map(p=>p.km), 1);
+  const innerW = W - padX*2;
+  const stepX = puntos.length > 1 ? innerW/(puntos.length-1) : 0;
+  const coords = puntos.map((p,i) => ({
+    x: padX + (puntos.length > 1 ? i*stepX : innerW/2),
+    y: H - padY - (p.km/maxKm) * (H - padY*2),
+    p
+  }));
+  const puntosPath = coords.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
+  return `
+    <div style="overflow-x:auto;margin-bottom:16px">
+      <div style="position:relative;min-width:${W}px">
+        <svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:${W}px;height:${H}px;display:block">
+          ${coords.length > 1 ? `<polyline points="${puntosPath}" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : ''}
+          ${coords.map(c => `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="3.5" fill="#3b82f6" stroke="var(--surface)" stroke-width="1.5"><title>${c.p.label}: ${c.p.km.toLocaleString('es-AR')} km</title></circle>`).join('')}
+        </svg>
+        <div style="position:relative;width:${W}px;height:14px">
+          ${coords.map(c => `<span style="position:absolute;left:${c.x.toFixed(1)}px;transform:translateX(-50%);font-size:9px;color:var(--text3);white-space:nowrap">${c.p.label}</span>`).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderReportes(){
   const v = vehiculoActivo();
   const datos = calcularReporteMensual(v.uuid);
@@ -3038,7 +3071,6 @@ function renderReportes(){
   const maxGasto = Math.max(...datos.map(d=>d.gasto), 1);
   const hoy = new Date();
   const puntosLecturas = datosGraficoLecturasKm(v.uuid);
-  const maxKmLecturas = Math.max(...puntosLecturas.map(p=>p.km), 1);
   document.getElementById('pacts').innerHTML = esMobile() ? '' : `<button class="btn btn-p btn-sm" onclick="modalRegistrarLecturaKm()">🔢 Registrar lectura de km</button>`;
 
   document.getElementById('content').innerHTML = `
@@ -3070,16 +3102,7 @@ function renderReportes(){
       <div class="ch"><div class="ct">🔢 Lecturas de kilometraje mensual</div>${esMobile() ? '' : `<button class="btn btn-sm btn-p" onclick="modalRegistrarLecturaKm()">+ Registrar</button>`}</div>
       <div class="card-body twrap">
         <p class="text2" style="margin-bottom:12px;font-size:12px">Registrá el km el día 1 de cada mes (o cualquier día cercano) y acá vas a ver cuánto recorriste cada mes, independiente de las cargas de combustible.</p>
-        ${puntosLecturas.length ? `
-        <div class="barchart-combo" style="margin-bottom:16px">
-          ${puntosLecturas.map(p=>`<div class="barchart-combo-col">
-            <div class="barchart-combo-bars">
-              <div class="barchart-combo-bar barchart-combo-bar-km" style="height:${(p.km/maxKmLecturas*100)}%" title="${p.km.toLocaleString('es-AR')} km"></div>
-            </div>
-            <div class="barchart-combo-label">${p.label}</div>
-          </div>`).join('')}
-        </div>
-        ` : ''}
+        ${puntosLecturas.length ? renderGraficoLineaLecturasKm(puntosLecturas) : ''}
         ${renderTablaLecturasKm(v.uuid)}
       </div>
     </div>
