@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.82-dev';
+const VERSION = 'v0.83-dev';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -60,6 +60,13 @@ function normalizarDB(){
       if(!r.uuid) r.uuid = cvNuevoUUID();
       if(!r.lastModified) r.lastModified = Date.now();
     }));
+
+  // Backfill de campos de tarifa vigente/histórico en gastos fijos cargados
+  // antes de que existiera "Actualizar tarifa" (ver actualizarTarifaGastoFijo).
+  DB.gastosFijos.forEach(g => {
+    if(!g.fecha_ultima_actualizacion) g.fecha_ultima_actualizacion = g.fecha_inicio;
+    if(g.acumuladoHistorico === undefined) g.acumuladoHistorico = 0;
+  });
 
   // Si no hay vehículo activo pero sí hay vehículos, activar el primero (no eliminado)
   if(!DB.config.vehiculoActivo){
@@ -1281,17 +1288,22 @@ function crearGastoFijo(datos){
   const g = tocar({
     uuid: cvNuevoUUID(), vehiculoId: datos.vehiculoId,
     tipo: datos.tipo, monto: Number(datos.monto),
-    periodicidad: datos.periodicidad, fecha_inicio: datos.fecha_inicio || hoyISO()
+    periodicidad: datos.periodicidad, fecha_inicio: datos.fecha_inicio || hoyISO(),
+    // fecha_ultima_actualizacion: desde cuándo rige el "monto" actual.
+    // acumuladoHistorico: lo ya aportado con tarifas viejas, congelado (ver
+    // actualizarTarifaGastoFijo). Un gasto recién creado no tiene tarifas
+    // viejas todavía, así que arranca en 0 con la fecha de inicio como
+    // "última actualización".
+    fecha_ultima_actualizacion: datos.fecha_inicio || hoyISO(),
+    acumuladoHistorico: 0
   });
   DB.gastosFijos.push(g); save(); return g;
 }
-// Edita un gasto fijo existente in place. Ojo: como prorratearGastoFijo usa
-// SIEMPRE el monto actual del registro (no hay historial de tarifas), editar
-// el monto cambia también el cálculo de costo/km de rangos de fechas
-// pasados, no solo de acá en adelante. Sirve perfecto para corregir un error
-// de carga; para un ajuste real de tarifa (inflación) es más prolijo borrar
-// este gasto fijo y crear uno nuevo con el monto actualizado desde la fecha
-// del ajuste, así los reportes de meses anteriores no se ven afectados.
+// Corrige un gasto fijo in place (tipo, monto, periodicidad, fecha de
+// inicio) SIN tocar el acumulado histórico ni la fecha de última
+// actualización — pensado para arreglar un error de carga (tipeaste mal el
+// monto, elegiste mal la periodicidad), no para reflejar un aumento de
+// tarifa real. Para eso último, ver actualizarTarifaGastoFijo.
 function editarGastoFijo(uuid, datos){
   const g = DB.gastosFijos.find(x=>x.uuid===uuid);
   if(!g) return null;
@@ -1303,8 +1315,30 @@ function editarGastoFijo(uuid, datos){
   save();
   return g;
 }
+// Registra un aumento de tarifa real (ej. inflación) sin crear un registro
+// nuevo ni perder precisión histórica: congela en acumuladoHistorico lo que
+// el monto VIEJO aportó desde la última actualización hasta hoy, y a partir
+// de ahí el "monto" pasa a ser el nuevo, contando desde hoy. Así en vez de
+// un gasto fijo nuevo por cada aumento (inmanejable con ajustes mensuales),
+// queda un solo registro con la tarifa vigente + un total histórico.
+function actualizarTarifaGastoFijo(uuid, montoNuevo, fechaHoy){
+  const g = DB.gastosFijos.find(x=>x.uuid===uuid);
+  if(!g) return null;
+  // Un día antes de fechaHoy: el mes del cambio de tarifa lo cuenta la
+  // tarifa NUEVA (desde fechaHoy), no la vieja — si no, se duplicaría ese
+  // mes (una vez congelado en el histórico, otra vez en lo vigente).
+  const diaAntes = new Date(fechaHoy);
+  diaAntes.setDate(diaAntes.getDate()-1);
+  const aportadoConTarifaVieja = prorratearMontoEnRango(g, g.fecha_inicio, g.fecha_ultima_actualizacion, diaAntes.toISOString());
+  g.acumuladoHistorico = (g.acumuladoHistorico||0) + aportadoConTarifaVieja;
+  g.monto = Number(montoNuevo);
+  g.fecha_ultima_actualizacion = fechaHoy;
+  tocar(g);
+  save();
+  return g;
+}
 function eliminarGastoFijo(uuid){
-  if(!confirm('¿Eliminar este gasto fijo?')) return;
+  if(!confirm('¿Eliminar este gasto fijo? También se pierde su acumulado histórico.')) return;
   DB.gastosFijos = DB.gastosFijos.filter(g=>g.uuid!==uuid);
   save(); goTo('gastos');
 }
@@ -1327,11 +1361,15 @@ function mesesEntre(desde, hasta){
   const d = new Date(desde), h = new Date(hasta);
   return Math.max((h.getFullYear()-d.getFullYear())*12 + (h.getMonth()-d.getMonth()) + (h.getDate()>=d.getDate()?0:-1)+1, 0) || 1;
 }
-function prorratearGastoFijo(gasto, desde, hasta){
-  // Nunca contar antes de que el gasto fijo exista (su fecha_inicio).
-  const inicioGasto = new Date(gasto.fecha_inicio);
-  const desdeEfectivo = inicioGasto > new Date(desde) ? gasto.fecha_inicio : desde;
-  if(new Date(desdeEfectivo) > new Date(hasta)) return 0; // el gasto empieza después del rango pedido
+// Prorratea la tarifa vigente (gasto.monto) entre dos fechas, sin contar
+// antes de "piso". Un solo helper reutilizado para dos cosas: el cálculo
+// normal (piso = fecha_inicio del gasto) y, al actualizar una tarifa,
+// cuánto aportó la tarifa VIEJA desde la última actualización hasta hoy
+// (piso = fecha_ultima_actualizacion) — ver actualizarTarifaGastoFijo.
+function prorratearMontoEnRango(gasto, piso, desde, hasta){
+  const pisoDate = new Date(piso);
+  const desdeEfectivo = pisoDate > new Date(desde) ? piso : desde;
+  if(new Date(desdeEfectivo) > new Date(hasta)) return 0;
 
   const meses = mesesEntre(desdeEfectivo, hasta);
   if(gasto.periodicidad === 'mensual') return gasto.monto * meses;
@@ -1343,6 +1381,25 @@ function prorratearGastoFijo(gasto, desde, hasta){
     return 0;
   }
   return 0;
+}
+// Costo total de un gasto fijo en un rango de fechas: acumulado histórico
+// (congelado por actualizaciones de tarifa anteriores, si el rango llega a
+// tocar ese período) + lo que corresponde a la tarifa vigente desde la
+// última actualización. El acumulado histórico entra COMPLETO si hay
+// cualquier solapamiento — no se puede prorratear con precisión de mes
+// porque ya no se guarda el detalle período a período de tarifas viejas.
+function prorratearGastoFijo(gasto, desde, hasta){
+  let total = 0;
+  const inicioGasto = new Date(gasto.fecha_inicio);
+  const fechaCorte = new Date(gasto.fecha_ultima_actualizacion || gasto.fecha_inicio);
+
+  if((gasto.acumuladoHistorico||0) > 0 && new Date(desde) < fechaCorte && new Date(hasta) >= inicioGasto){
+    total += gasto.acumuladoHistorico;
+  }
+
+  total += prorratearMontoEnRango(gasto, gasto.fecha_ultima_actualizacion || gasto.fecha_inicio, desde, hasta);
+
+  return total;
 }
 
 // KPI: costo por km (incluye combustible, mantenimientos, componentes reemplazados,
@@ -1367,7 +1424,11 @@ function calcularCostoPorKm(vehiculoId, fechaInicio, fechaFin){
   );
   const gastosFijosDelVehiculo = DB.gastosFijos.filter(g=>g.vehiculoId===vehiculoId);
   const desgloseFijos = gastosFijosDelVehiculo
-    .map(g => ({ tipo: g.tipo, periodicidad: g.periodicidad, monto: g.monto, aportado: prorratearGastoFijo(g, fechaInicio, fechaFin) }))
+    .map(g => {
+      const fechaCorte = new Date(g.fecha_ultima_actualizacion || g.fecha_inicio);
+      const incluyeHistorico = (g.acumuladoHistorico||0) > 0 && new Date(fechaInicio) < fechaCorte && new Date(fechaFin) >= new Date(g.fecha_inicio);
+      return { tipo: g.tipo, periodicidad: g.periodicidad, monto: g.monto, incluyeHistorico, aportado: prorratearGastoFijo(g, fechaInicio, fechaFin) };
+    })
     .filter(x => x.aportado > 0);
   const totalFijos = sumar(desgloseFijos.map(x=>x.aportado));
 
@@ -2571,7 +2632,7 @@ function actualizarCostoKm(){
         <tr><td>Gastos variables extra</td><td>${fmtMoney(r.desglose.totalVariablesExtra)}</td></tr>
         <tr><td>Gastos fijos (prorrateados)</td><td>${fmtMoney(r.desglose.totalFijos)}</td></tr>
         ${r.desglose.desgloseFijos.length ? r.desglose.desgloseFijos.map(x=>`
-        <tr><td class="text3" style="font-size:11px;padding-left:22px">↳ ${x.tipo} (${x.periodicidad}, ${fmtMoney(x.monto)})</td><td class="text3" style="font-size:11px">${fmtMoney(x.aportado)}</td></tr>
+        <tr><td class="text3" style="font-size:11px;padding-left:22px">↳ ${x.tipo} (${x.periodicidad}, ${fmtMoney(x.monto)} vigente${x.incluyeHistorico?' — incluye tarifa anterior':''})</td><td class="text3" style="font-size:11px">${fmtMoney(x.aportado)}</td></tr>
         `).join('') : ''}
         <tr><td><b>Total</b></td><td><b>${fmtMoney(r.desglose.gastoTotal)}</b></td></tr>
       </tbody></table>
@@ -2582,11 +2643,14 @@ function actualizarCostoKm(){
 function renderTablaGastosFijos(vehiculoId){
   const gastos = DB.gastosFijos.filter(g=>g.vehiculoId===vehiculoId);
   if(!gastos.length) return `<div class="empty">Sin gastos fijos registrados.</div>`;
-  return `<table><thead><tr><th>Tipo</th><th>Monto</th><th>Periodicidad</th><th>Desde</th><th></th></tr></thead><tbody>
+  return `<table><thead><tr><th>Tipo</th><th>Monto vigente</th><th>Periodicidad</th><th>Vigente desde</th><th>Acum. histórico</th><th></th></tr></thead><tbody>
     ${gastos.map(g=>`<tr>
-      <td>${g.tipo}</td><td>${fmtMoney(g.monto)}</td><td>${g.periodicidad}</td><td class="mono">${fmtFecha(g.fecha_inicio)}</td>
+      <td>${g.tipo}</td><td>${fmtMoney(g.monto)}</td><td>${g.periodicidad}</td>
+      <td class="mono">${fmtFecha(g.fecha_ultima_actualizacion||g.fecha_inicio)}</td>
+      <td>${(g.acumuladoHistorico||0)>0 ? fmtMoney(g.acumuladoHistorico) : '<span class="text3">—</span>'}</td>
       <td style="white-space:nowrap">
-        <button class="btn btn-sm btn-e" onclick="modalEditarGastoFijo('${g.uuid}')">✎</button>
+        <button class="btn btn-sm btn-e" onclick="modalEditarGastoFijo('${g.uuid}')" title="Corregir un error de carga">✎</button>
+        ${g.periodicidad!=='unico' ? `<button class="btn btn-sm" onclick="modalActualizarTarifaGastoFijo('${g.uuid}')" title="Registrar un aumento de tarifa">💲</button>` : ''}
         <button class="btn btn-sm btn-d" onclick="eliminarGastoFijo('${g.uuid}')">✕</button>
       </td>
     </tr>`).join('')}
@@ -2606,12 +2670,16 @@ function renderTablaGastosVariables(vehiculoId){
 function modalNuevoGastoFijo(){
   modalGastoFijo();
 }
+// "Corregir" — edición in-place para arreglar un error de carga (tipo,
+// monto, periodicidad, fecha de inicio). NO toca fecha_ultima_actualizacion
+// ni acumuladoHistorico — para reflejar un aumento de tarifa real, usar
+// "💲 Actualizar tarifa" (modalActualizarTarifaGastoFijo) en su lugar.
 function modalEditarGastoFijo(uuid){
   modalGastoFijo(uuid);
 }
 function modalGastoFijo(uuidExistente){
   const g = uuidExistente ? DB.gastosFijos.find(x=>x.uuid===uuidExistente) : null;
-  abrirModal(g ? '✎ Editar gasto fijo' : '📌 Nuevo gasto fijo', `
+  abrirModal(g ? '✎ Corregir gasto fijo' : '📌 Nuevo gasto fijo', `
     <div class="fg"><label>Tipo</label><select id="f-tipo">${TIPOS_GASTO_FIJO.map(t=>`<option ${g&&g.tipo===t?'selected':''}>${t}</option>`).join('')}</select></div>
     <div class="fgrid">
       <div class="fg"><label>Monto</label><input type="number" inputmode="decimal" id="f-monto" step="0.01" value="${g?g.monto:''}"></div>
@@ -2623,11 +2691,39 @@ function modalGastoFijo(uuidExistente){
       </select></div>
     </div>
     <div class="fg"><label>Fecha de inicio</label><input type="date" id="f-fecha" value="${g?g.fecha_inicio.slice(0,10):new Date().toISOString().slice(0,10)}"></div>
-    ${g ? `<div class="note" style="margin-top:10px;font-size:11px">Editar el monto también cambia el costo/km ya calculado de meses <b>pasados</b> (no hay historial de tarifas: siempre se usa el monto actual). Para corregir un error de carga, editá tranquilo. Para un ajuste real de tarifa (ej. inflación), es más prolijo dejar este gasto como está, borrarlo y cargar uno nuevo con el monto actualizado desde la fecha del ajuste — así los reportes de meses anteriores no se alteran.</div>` : ''}
+    ${g ? `<div class="note" style="margin-top:10px;font-size:11px">Esto corrige el registro tal cual está — pensado para arreglar un error de carga (ej. tipeaste mal el monto). No toca el acumulado histórico ya congelado. Si lo que cambió es la tarifa real (inflación), cerrá este modal y usá <b>💲 Actualizar tarifa</b> en la tabla en su lugar.</div>` : ''}
   `, `
     <button class="btn" onclick="cerrarModal()">Cancelar</button>
     <button class="btn btn-p" onclick="guardarGastoFijo(${uuidExistente ? `'${uuidExistente}'` : 'null'})">Guardar</button>
   `);
+}
+// "Actualizar tarifa" — para un aumento real (ej. inflación mensual): NO
+// crea un registro nuevo (evita la lista inmanejable de un gasto fijo por
+// mes) ni pisa el histórico. Congela lo aportado por la tarifa vieja desde
+// la última actualización hasta la fecha elegida, y a partir de ahí cuenta
+// con la tarifa nueva.
+function modalActualizarTarifaGastoFijo(uuid){
+  const g = DB.gastosFijos.find(x=>x.uuid===uuid);
+  if(!g) return;
+  abrirModal(`💲 Actualizar tarifa — ${g.tipo}`, `
+    <p class="text2" style="font-size:12px;margin-bottom:10px">Tarifa vigente hasta hoy: <b>${fmtMoney(g.monto)}</b> (${g.periodicidad}), desde ${fmtFecha(g.fecha_ultima_actualizacion||g.fecha_inicio)}.</p>
+    <div class="fgrid">
+      <div class="fg"><label>Monto nuevo</label><input type="number" inputmode="decimal" id="f-monto-nuevo" step="0.01" value="${g.monto}" onfocus="this.select()"></div>
+      <div class="fg"><label>Rige desde</label><input type="date" id="f-fecha-cambio" value="${hoyISO().slice(0,10)}"></div>
+    </div>
+    <div class="note" style="margin-top:10px;font-size:11px">Lo aportado con la tarifa de ${fmtMoney(g.monto)} hasta la fecha elegida queda congelado como acumulado histórico (sigue contando igual en los reportes de esos meses). De ahí en adelante se cuenta con el monto nuevo. No se crea ningún registro nuevo.</div>
+  `, `
+    <button class="btn" onclick="cerrarModal()">Cancelar</button>
+    <button class="btn btn-p" onclick="guardarActualizarTarifaGastoFijo('${uuid}')">Actualizar tarifa</button>
+  `);
+}
+function guardarActualizarTarifaGastoFijo(uuid){
+  const montoNuevo = Number(document.getElementById('f-monto-nuevo').value);
+  const fechaHoy = new Date(document.getElementById('f-fecha-cambio').value).toISOString();
+  if(!montoNuevo){ alert('Ingresá el monto nuevo.'); return; }
+  cerrarModal();
+  actualizarTarifaGastoFijo(uuid, montoNuevo, fechaHoy);
+  goTo('gastos');
 }
 function guardarGastoFijo(uuidExistente){
   const v = vehiculoActivo();
