@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.81-dev';
+const VERSION = 'v0.82-dev';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -1284,6 +1284,24 @@ function crearGastoFijo(datos){
     periodicidad: datos.periodicidad, fecha_inicio: datos.fecha_inicio || hoyISO()
   });
   DB.gastosFijos.push(g); save(); return g;
+}
+// Edita un gasto fijo existente in place. Ojo: como prorratearGastoFijo usa
+// SIEMPRE el monto actual del registro (no hay historial de tarifas), editar
+// el monto cambia también el cálculo de costo/km de rangos de fechas
+// pasados, no solo de acá en adelante. Sirve perfecto para corregir un error
+// de carga; para un ajuste real de tarifa (inflación) es más prolijo borrar
+// este gasto fijo y crear uno nuevo con el monto actualizado desde la fecha
+// del ajuste, así los reportes de meses anteriores no se ven afectados.
+function editarGastoFijo(uuid, datos){
+  const g = DB.gastosFijos.find(x=>x.uuid===uuid);
+  if(!g) return null;
+  g.tipo = datos.tipo;
+  g.monto = Number(datos.monto);
+  g.periodicidad = datos.periodicidad;
+  g.fecha_inicio = datos.fecha_inicio;
+  tocar(g);
+  save();
+  return g;
 }
 function eliminarGastoFijo(uuid){
   if(!confirm('¿Eliminar este gasto fijo?')) return;
@@ -2567,7 +2585,10 @@ function renderTablaGastosFijos(vehiculoId){
   return `<table><thead><tr><th>Tipo</th><th>Monto</th><th>Periodicidad</th><th>Desde</th><th></th></tr></thead><tbody>
     ${gastos.map(g=>`<tr>
       <td>${g.tipo}</td><td>${fmtMoney(g.monto)}</td><td>${g.periodicidad}</td><td class="mono">${fmtFecha(g.fecha_inicio)}</td>
-      <td><button class="btn btn-sm btn-d" onclick="eliminarGastoFijo('${g.uuid}')">✕</button></td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-sm btn-e" onclick="modalEditarGastoFijo('${g.uuid}')">✎</button>
+        <button class="btn btn-sm btn-d" onclick="eliminarGastoFijo('${g.uuid}')">✕</button>
+      </td>
     </tr>`).join('')}
   </tbody></table>`;
 }
@@ -2583,26 +2604,40 @@ function renderTablaGastosVariables(vehiculoId){
 }
 
 function modalNuevoGastoFijo(){
-  abrirModal('📌 Nuevo gasto fijo', `
-    <div class="fg"><label>Tipo</label><select id="f-tipo">${TIPOS_GASTO_FIJO.map(t=>`<option>${t}</option>`).join('')}</select></div>
+  modalGastoFijo();
+}
+function modalEditarGastoFijo(uuid){
+  modalGastoFijo(uuid);
+}
+function modalGastoFijo(uuidExistente){
+  const g = uuidExistente ? DB.gastosFijos.find(x=>x.uuid===uuidExistente) : null;
+  abrirModal(g ? '✎ Editar gasto fijo' : '📌 Nuevo gasto fijo', `
+    <div class="fg"><label>Tipo</label><select id="f-tipo">${TIPOS_GASTO_FIJO.map(t=>`<option ${g&&g.tipo===t?'selected':''}>${t}</option>`).join('')}</select></div>
     <div class="fgrid">
-      <div class="fg"><label>Monto</label><input type="number" inputmode="decimal" id="f-monto" step="0.01"></div>
-      <div class="fg"><label>Periodicidad</label><select id="f-period"><option value="mensual">Mensual</option><option value="bimestral">Bimestral</option><option value="anual">Anual</option><option value="unico">Único</option></select></div>
+      <div class="fg"><label>Monto</label><input type="number" inputmode="decimal" id="f-monto" step="0.01" value="${g?g.monto:''}"></div>
+      <div class="fg"><label>Periodicidad</label><select id="f-period">
+        <option value="mensual" ${g&&g.periodicidad==='mensual'?'selected':''}>Mensual</option>
+        <option value="bimestral" ${g&&g.periodicidad==='bimestral'?'selected':''}>Bimestral</option>
+        <option value="anual" ${g&&g.periodicidad==='anual'?'selected':''}>Anual</option>
+        <option value="unico" ${g&&g.periodicidad==='unico'?'selected':''}>Único</option>
+      </select></div>
     </div>
-    <div class="fg"><label>Fecha de inicio</label><input type="date" id="f-fecha" value="${new Date().toISOString().slice(0,10)}"></div>
+    <div class="fg"><label>Fecha de inicio</label><input type="date" id="f-fecha" value="${g?g.fecha_inicio.slice(0,10):new Date().toISOString().slice(0,10)}"></div>
+    ${g ? `<div class="note" style="margin-top:10px;font-size:11px">Editar el monto también cambia el costo/km ya calculado de meses <b>pasados</b> (no hay historial de tarifas: siempre se usa el monto actual). Para corregir un error de carga, editá tranquilo. Para un ajuste real de tarifa (ej. inflación), es más prolijo dejar este gasto como está, borrarlo y cargar uno nuevo con el monto actualizado desde la fecha del ajuste — así los reportes de meses anteriores no se alteran.</div>` : ''}
   `, `
     <button class="btn" onclick="cerrarModal()">Cancelar</button>
-    <button class="btn btn-p" onclick="guardarNuevoGastoFijo()">Guardar</button>
+    <button class="btn btn-p" onclick="guardarGastoFijo(${uuidExistente ? `'${uuidExistente}'` : 'null'})">Guardar</button>
   `);
 }
-function guardarNuevoGastoFijo(){
+function guardarGastoFijo(uuidExistente){
   const v = vehiculoActivo();
   const tipo = document.getElementById('f-tipo').value;
   const monto = Number(document.getElementById('f-monto').value);
   const periodicidad = document.getElementById('f-period').value;
   const fecha_inicio = new Date(document.getElementById('f-fecha').value).toISOString();
   if(!monto){ alert('Ingresá un monto.'); return; }
-  crearGastoFijo({ vehiculoId: v.uuid, tipo, monto, periodicidad, fecha_inicio });
+  if(uuidExistente) editarGastoFijo(uuidExistente, { tipo, monto, periodicidad, fecha_inicio });
+  else crearGastoFijo({ vehiculoId: v.uuid, tipo, monto, periodicidad, fecha_inicio });
   cerrarModal(); goTo('gastos');
 }
 function modalNuevoGastoVariable(){
