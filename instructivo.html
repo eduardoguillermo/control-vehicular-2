@@ -540,6 +540,7 @@
       <tr><td><b>Único</b></td><td>el monto completo, una sola vez, en el mes de su fecha de inicio</td></tr>
     </table>
     <div class="note">Un gasto fijo nunca se cuenta en meses <b>anteriores</b> a su fecha de inicio — si lo cargaste este mes, no aparece retroactivamente en meses pasados aunque el rango que estés mirando los incluya.</div>
+    <div class="note">Un solo gasto fijo <b>por tipo</b> y por vehículo (un Seguro, una Patente, etc.) — salvo "Otro", que admite varios porque es el cajón de sastre para gastos puntuales sin categoría propia. La app avisa si intentás crear un segundo del mismo tipo, y te redirige a 💲 Actualizar tarifa en vez de duplicar.</div>
     <p>Se carga <b>una sola vez</b> — no hace falta volver a cargarlo cada mes, queda como un registro permanente. Desde la tabla hay dos acciones distintas, según qué necesites:</p>
     <table>
       <tr><th>Acción</th><th>Para qué sirve</th></tr>
@@ -686,8 +687,9 @@
       </div>
     </div>
     <details class="changelog-toggle">
-      <summary>Ver las 77 versiones</summary>
+      <summary>Ver las 78 versiones</summary>
       <div class="changelog-list">
+        <div class="changelog-row"><span class="cl-ver">v0.84</span><span class="cl-date">2026-08-22</span><span class="cl-desc">Un solo gasto fijo por tipo y vehículo (salvo "Otro") — avisa si se intenta duplicar en vez de crear otro registro</span></div>
         <div class="changelog-row"><span class="cl-ver">v0.83</span><span class="cl-date">2026-08-22</span><span class="cl-desc">Gastos fijos: "💲 Actualizar tarifa" para ajustes de precio (inflación) sin crear un registro nuevo por mes — congela lo aportado por la tarifa vieja en un acumulado histórico y sigue con la nueva desde la fecha del cambio</span></div>
         <div class="changelog-row"><span class="cl-ver">v0.82</span><span class="cl-date">2026-08-22</span><span class="cl-desc">Editar gastos fijos (✎ Corregir, para errores de carga)</span></div>
         <div class="changelog-row"><span class="cl-ver">v0.81</span><span class="cl-date">2026-08-22</span><span class="cl-desc">Explicar en el instructivo cómo se calcula cada KPI del Dashboard</span></div>

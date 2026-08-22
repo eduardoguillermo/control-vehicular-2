@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.83-dev';
+const VERSION = 'v0.84-dev';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -2732,6 +2732,18 @@ function guardarGastoFijo(uuidExistente){
   const periodicidad = document.getElementById('f-period').value;
   const fecha_inicio = new Date(document.getElementById('f-fecha').value).toISOString();
   if(!monto){ alert('Ingresá un monto.'); return; }
+  // Un solo gasto fijo activo por tipo (salvo "Otro", que es el cajón de
+  // sastre para gastos puntuales sin categoría propia) — los cambios de
+  // tarifa se manejan con 💲 Actualizar tarifa sobre el mismo registro, no
+  // creando uno nuevo, para no terminar con varios "Seguro" sueltos. Aplica
+  // también al editar, por si se cambia el Tipo a uno que ya existe.
+  if(tipo !== 'Otro'){
+    const yaExiste = DB.gastosFijos.some(g => g.vehiculoId===v.uuid && g.tipo===tipo && g.uuid!==uuidExistente);
+    if(yaExiste){
+      alert(`Ya tenés un gasto fijo de tipo "${tipo}" para este vehículo. Si cambió la tarifa, usá 💲 Actualizar tarifa sobre ese registro en vez de crear uno nuevo. Si fue un error de carga, usá ✎ Corregir.`);
+      return;
+    }
+  }
   if(uuidExistente) editarGastoFijo(uuidExistente, { tipo, monto, periodicidad, fecha_inicio });
   else crearGastoFijo({ vehiculoId: v.uuid, tipo, monto, periodicidad, fecha_inicio });
   cerrarModal(); goTo('gastos');
