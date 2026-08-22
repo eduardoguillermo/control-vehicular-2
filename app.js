@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v0.84-dev';
+const VERSION = 'v0.85-dev';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -1342,6 +1342,78 @@ function eliminarGastoFijo(uuid){
   DB.gastosFijos = DB.gastosFijos.filter(g=>g.uuid!==uuid);
   save(); goTo('gastos');
 }
+
+// ── CONSOLIDACIÓN DE GASTOS FIJOS DUPLICADOS ────────────────────────────────
+// Antes de que existiera "💲 Actualizar tarifa", la única forma de reflejar
+// un aumento de precio era cargar un gasto fijo nuevo del mismo tipo, sin
+// cerrar el viejo. Como prorratearGastoFijo suma TODOS los registros que
+// encuentra (cada uno desde su propia fecha_inicio, sin techo), tener varios
+// del mismo tipo infla el costo por km en cualquier rango que toque más de
+// uno a la vez. Estas funciones detectan esos duplicados y los fusionan en
+// un solo registro, reconstruyendo qué tarifa regía en cada período (la
+// fecha de inicio de cada uno corta al anterior) para no perder ni duplicar
+// nada del total ya aportado.
+
+// Grupos de gastos fijos duplicados (más de un registro del mismo tipo) de
+// un vehículo. "Otro" se excluye a propósito: admite varios por diseño.
+function detectarGastosFijosDuplicados(vehiculoId){
+  const porTipo = {};
+  DB.gastosFijos.filter(g=>g.vehiculoId===vehiculoId && g.tipo!=='Otro').forEach(g=>{
+    (porTipo[g.tipo] = porTipo[g.tipo] || []).push(g);
+  });
+  return Object.entries(porTipo)
+    .filter(([tipo, regs]) => regs.length > 1)
+    .map(([tipo, regs]) => ({ tipo, registros: regs.slice().sort((a,b)=>new Date(a.fecha_inicio)-new Date(b.fecha_inicio)) }));
+}
+
+// Calcula cómo quedaría la fusión de un grupo de duplicados SIN aplicarla
+// todavía (para mostrar el detalle y pedir confirmación antes). Cada
+// registro, salvo el más nuevo, se trata como vigente desde su propia
+// fecha_inicio hasta el día antes de que arranque el siguiente; el más
+// nuevo pasa a ser la tarifa vigente del registro fusionado.
+function calcularConsolidacionGastoFijo(registros){
+  const ordenados = registros.slice().sort((a,b)=>new Date(a.fecha_inicio)-new Date(b.fecha_inicio));
+  let acumuladoHistorico = 0;
+  const detalle = [];
+  for(let i=0; i<ordenados.length-1; i++){
+    const actual = ordenados[i];
+    const siguiente = ordenados[i+1];
+    const diaAntes = new Date(siguiente.fecha_inicio);
+    diaAntes.setDate(diaAntes.getDate()-1);
+    const aportado = prorratearMontoEnRango(actual, actual.fecha_inicio, actual.fecha_inicio, diaAntes.toISOString());
+    acumuladoHistorico += aportado;
+    detalle.push({ registro: actual, desde: actual.fecha_inicio, hasta: diaAntes.toISOString(), aportado });
+  }
+  const masNuevo = ordenados[ordenados.length-1];
+  // Si el registro más nuevo ya tenía su propio acumulado (se le había
+  // aplicado "Actualizar tarifa" antes de duplicarse), se preserva.
+  acumuladoHistorico += (masNuevo.acumuladoHistorico || 0);
+
+  return {
+    tipo: masNuevo.tipo,
+    monto: masNuevo.monto,
+    periodicidad: masNuevo.periodicidad,
+    fecha_inicio: ordenados[0].fecha_inicio,
+    fecha_ultima_actualizacion: masNuevo.fecha_ultima_actualizacion || masNuevo.fecha_inicio,
+    acumuladoHistorico, detalle, masNuevo
+  };
+}
+function ejecutarConsolidacionGastoFijo(vehiculoId, tipo){
+  const grupo = DB.gastosFijos.filter(g=>g.vehiculoId===vehiculoId && g.tipo===tipo);
+  if(grupo.length < 2) return null;
+  const c = calcularConsolidacionGastoFijo(grupo);
+  const nuevo = tocar({
+    uuid: cvNuevoUUID(), vehiculoId,
+    tipo: c.tipo, monto: c.monto, periodicidad: c.periodicidad,
+    fecha_inicio: c.fecha_inicio, fecha_ultima_actualizacion: c.fecha_ultima_actualizacion,
+    acumuladoHistorico: c.acumuladoHistorico
+  });
+  DB.gastosFijos = DB.gastosFijos.filter(g => !(g.vehiculoId===vehiculoId && g.tipo===tipo));
+  DB.gastosFijos.push(nuevo);
+  save();
+  return nuevo;
+}
+
 function crearGastoVariable(datos){
   const g = tocar({
     uuid: cvNuevoUUID(), vehiculoId: datos.vehiculoId,
@@ -2580,7 +2652,21 @@ function renderGastos(){
     <button class="btn btn-p btn-sm" onclick="modalNuevoGastoVariable()">+ Gasto variable</button>
   `;
   const desdeDefault = new Date(); desdeDefault.setMonth(desdeDefault.getMonth()-12);
+  const duplicados = detectarGastosFijosDuplicados(v.uuid);
   document.getElementById('content').innerHTML = `
+    ${duplicados.length ? `
+    <div class="card" style="border-color:var(--amber)">
+      <div class="ch"><div class="ct">⚠️ Gastos fijos duplicados</div></div>
+      <div class="card-body">
+        <p class="text2" style="font-size:12px;margin-bottom:6px">Tenés más de un registro del mismo tipo — típico de antes de que existiera "💲 Actualizar tarifa" (se cargaba un gasto fijo nuevo por cada aumento). Mientras estén separados, el costo por km los suma a todos de golpe en vez de uno a la vez, y queda inflado. Revisá el detalle antes de fusionar — no se pierde nada del total.</p>
+        ${duplicados.map(d => `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid var(--border)">
+          <span>${d.tipo} <span class="text3" style="font-size:11px">(${d.registros.length} registros)</span></span>
+          <button class="btn btn-sm btn-p" onclick="modalConsolidarGastoFijo('${d.tipo}')">Ver detalle y fusionar</button>
+        </div>`).join('')}
+      </div>
+    </div>
+    ` : ''}
     <div class="card">
       <div class="ch"><div class="ct">💲 Costo por kilómetro</div></div>
       <div class="card-body">
@@ -2723,6 +2809,38 @@ function guardarActualizarTarifaGastoFijo(uuid){
   if(!montoNuevo){ alert('Ingresá el monto nuevo.'); return; }
   cerrarModal();
   actualizarTarifaGastoFijo(uuid, montoNuevo, fechaHoy);
+  goTo('gastos');
+}
+function modalConsolidarGastoFijo(tipo){
+  const v = vehiculoActivo();
+  const grupo = DB.gastosFijos.filter(g=>g.vehiculoId===v.uuid && g.tipo===tipo);
+  if(grupo.length < 2){ return; }
+  const c = calcularConsolidacionGastoFijo(grupo);
+  abrirModal(`🔗 Fusionar "${tipo}"`, `
+    <p class="text2" style="font-size:12px;margin-bottom:10px">Se reconstruye qué tarifa regía en cada período, usando la fecha de inicio de cada registro como corte del anterior:</p>
+    <div class="twrap">
+      <table style="width:100%;font-size:12px">
+        <thead><tr><th>Período</th><th>Tarifa</th><th>Aportó</th></tr></thead>
+        <tbody>
+          ${c.detalle.map(x=>`<tr>
+            <td class="mono">${fmtFecha(x.desde)} – ${fmtFecha(x.hasta)}</td>
+            <td>${fmtMoney(x.registro.monto)} (${x.registro.periodicidad})</td>
+            <td>${fmtMoney(x.aportado)}</td>
+          </tr>`).join('')}
+          <tr><td class="mono">${fmtFecha(c.fecha_ultima_actualizacion)} – hoy</td><td>${fmtMoney(c.monto)} (${c.periodicidad}) <b>· vigente</b></td><td class="text3" style="font-size:11px">se sigue calculando solo, de acá en más</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note" style="margin-top:10px;font-size:11px">Resultado: <b>1 solo registro</b> de "${tipo}", con acumulado histórico <b>${fmtMoney(c.acumuladoHistorico)}</b> y tarifa vigente <b>${fmtMoney(c.monto)}</b> (${c.periodicidad}) desde ${fmtFecha(c.fecha_ultima_actualizacion)}. Se eliminan los ${grupo.length} registros actuales y se reemplazan por este.</div>
+  `, `
+    <button class="btn" onclick="cerrarModal()">Cancelar</button>
+    <button class="btn btn-p" onclick="confirmarConsolidarGastoFijo('${tipo}')">Confirmar fusión</button>
+  `);
+}
+function confirmarConsolidarGastoFijo(tipo){
+  const v = vehiculoActivo();
+  cerrarModal();
+  ejecutarConsolidacionGastoFijo(v.uuid, tipo);
   goTo('gastos');
 }
 function guardarGastoFijo(uuidExistente){
