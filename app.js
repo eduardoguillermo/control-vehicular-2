@@ -2,7 +2,7 @@
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────────
 const SKEY = 'control-vehicular-dev2';
-const VERSION = 'v1.03-dev';
+const VERSION = 'v1.04-dev';
 const DEV_MODE = true;
 
 const TIPOS_GASTO_FIJO = ['Seguro','Patente/Impuesto','Cochera','Alarma/Monitoreo','Otro'];
@@ -3010,12 +3010,35 @@ function guardarNuevoGastoVariable(){
 
 // ── VISTA: VEHÍCULOS ──────────────────────────────────────────────────────────
 // ── VISTA: REPORTES ──────────────────────────────────────────────────────────
+// Km recorridos por mes según las LECTURAS de km (no las cargas de
+// combustible) — un punto por cada lectura consecutiva de los últimos 12
+// meses. A diferencia de "Km y gasto por mes" arriba (que infiere el km del
+// mes con la última carga conocida), acá el dato sale directo de lo que vos
+// registraste, así que es independiente del combustible.
+function datosGraficoLecturasKm(vehiculoId){
+  const lecturas = lecturasKmVehiculo(vehiculoId); // ascendente por fecha
+  const haceUnAnio = new Date(); haceUnAnio.setFullYear(haceUnAnio.getFullYear()-1);
+  const puntos = [];
+  for(let i=1; i<lecturas.length; i++){
+    const actual = lecturas[i];
+    const anterior = lecturas[i-1];
+    if(new Date(actual.fecha) < haceUnAnio) continue;
+    const km = Math.max(0, actual.km - anterior.km);
+    const am = anioMesDeISO(actual.fecha);
+    const label = new Date(am.year, am.month, 1).toLocaleDateString('es-AR', {month:'short', year:'2-digit'});
+    puntos.push({ label, km });
+  }
+  return puntos;
+}
+
 function renderReportes(){
   const v = vehiculoActivo();
   const datos = calcularReporteMensual(v.uuid);
   const maxKm = Math.max(...datos.map(d=>d.kmDelMes), 1);
   const maxGasto = Math.max(...datos.map(d=>d.gasto), 1);
   const hoy = new Date();
+  const puntosLecturas = datosGraficoLecturasKm(v.uuid);
+  const maxKmLecturas = Math.max(...puntosLecturas.map(p=>p.km), 1);
   document.getElementById('pacts').innerHTML = esMobile() ? '' : `<button class="btn btn-p btn-sm" onclick="modalRegistrarLecturaKm()">🔢 Registrar lectura de km</button>`;
 
   document.getElementById('content').innerHTML = `
@@ -3047,6 +3070,16 @@ function renderReportes(){
       <div class="ch"><div class="ct">🔢 Lecturas de kilometraje mensual</div>${esMobile() ? '' : `<button class="btn btn-sm btn-p" onclick="modalRegistrarLecturaKm()">+ Registrar</button>`}</div>
       <div class="card-body twrap">
         <p class="text2" style="margin-bottom:12px;font-size:12px">Registrá el km el día 1 de cada mes (o cualquier día cercano) y acá vas a ver cuánto recorriste cada mes, independiente de las cargas de combustible.</p>
+        ${puntosLecturas.length ? `
+        <div class="barchart-combo" style="margin-bottom:16px">
+          ${puntosLecturas.map(p=>`<div class="barchart-combo-col">
+            <div class="barchart-combo-bars">
+              <div class="barchart-combo-bar barchart-combo-bar-km" style="height:${(p.km/maxKmLecturas*100)}%" title="${p.km.toLocaleString('es-AR')} km"></div>
+            </div>
+            <div class="barchart-combo-label">${p.label}</div>
+          </div>`).join('')}
+        </div>
+        ` : ''}
         ${renderTablaLecturasKm(v.uuid)}
       </div>
     </div>
